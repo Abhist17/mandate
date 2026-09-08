@@ -46,8 +46,14 @@ interface IPerpVenue {
     /// @notice Total account value: free collateral plus margin plus unrealised PnL.
     function accountEquity(address account) external view returns (uint256);
 
-    /// @notice Sum of open notional across all of an account's positions, in asset units.
+    /// @notice Sum of open notional across all of an account's positions, at current marks.
     function totalNotional(address account) external view returns (uint256);
+
+    /// @notice Sum of open notional valued at each position's *entry* price.
+    /// @dev The position cap is checked when an order is placed, so entry-priced notional is
+    ///      the quantity it actually bounds. Mark-priced notional drifts afterwards as the
+    ///      market moves, which is not a violation — see {MandateAccount-openPosition}.
+    function entryNotional(address account) external view returns (uint256);
 
     /// @notice Notional an order would add, priced at the current oracle price.
     function quoteNotional(uint16 marketId, uint256 size) external view returns (uint256);

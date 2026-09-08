@@ -49,6 +49,7 @@ contract Fixture is Test {
     address internal lp2 = makeAddr("lp2");
     address internal trader = makeAddr("trader");
     address internal stranger = makeAddr("stranger");
+    address internal backstop;
 
     function setUp() public virtual {
         vm.warp(T0);
@@ -79,7 +80,7 @@ contract Fixture is Test {
         _setPrice(ETH, 2_500);
 
         // Back the venue so a profitable mandate can actually be paid out.
-        address backstop = makeAddr("backstop");
+        backstop = makeAddr("backstop");
         asset.mint(backstop, VENUE_RESERVE);
         vm.startPrank(backstop);
         asset.approve(address(venue), VENUE_RESERVE);

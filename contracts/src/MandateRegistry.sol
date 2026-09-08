@@ -176,6 +176,19 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         MandateAccount(account).initialize(mandateId, trader, address(this), address(venue));
 
         _terms[mandateId] = terms;
+
+        // Move the capital BEFORE registering the mandate as Active.
+        //
+        // Ordering matters here and it is not cosmetic. `pool.totalAssets()` is
+        // `idle + Σ(equity of Active mandates)`, and the pool's allocation cap is a fraction
+        // of that total. Registering the mandate first would count its allocation as mandate
+        // equity while the same capital was still sitting in idle — inflating totalAssets by
+        // exactly the amount being allocated, and so inflating the cap that is supposed to
+        // bound it. A 25% allocation would pass a 20% cap. Found by
+        // CapitalPool.t.sol::test_allocate_respectsMaxAllocationBps.
+        pool.allocate(account, terms.allocation);
+        MandateAccount(account).fundVenue(terms.allocation);
+
         _states[mandateId] = Types.MandateState({
             trader: trader,
             account: account,
@@ -192,10 +205,6 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         _mandatesOf[trader].push(mandateId);
         _activeMandates.push(mandateId);
         _activeIndex[mandateId] = _activeMandates.length;
-
-        // Pull capital from the pool into the account, then post it to the venue.
-        pool.allocate(account, terms.allocation);
-        MandateAccount(account).fundVenue(terms.allocation);
 
         emit MandateIssued(
             mandateId,
@@ -270,12 +279,12 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         if (s.status != Types.Status.Active) revert Errors.MandateNotActive(mandateId);
 
         Types.Terms memory terms = _terms[mandateId];
-        uint256 liveEquity = MandateAccount(s.account).equity();
+        uint256 markedEquity = MandateAccount(s.account).equity();
 
         RiskEngine.MarkResult memory r = RiskEngine.evaluate(
             RiskEngine.MarkInput({
                 allocation: terms.allocation,
-                netPnl: int256(liveEquity) - int256(terms.allocation),
+                netPnl: int256(markedEquity) - int256(terms.allocation),
                 highWaterMark: s.highWaterMark,
                 dayStartEquity: s.dayStartEquity,
                 dayStartTime: s.dayStartTime,
@@ -302,7 +311,7 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
             r.highWaterMark,
             r.trailingFloor,
             r.dailyFloor,
-            int256(liveEquity) - int256(terms.allocation),
+            int256(markedEquity) - int256(terms.allocation),
             uint64(block.timestamp),
             msg.sender
         );

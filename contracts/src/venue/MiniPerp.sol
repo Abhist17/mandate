@@ -534,6 +534,15 @@ contract MiniPerp is IPerpVenue, Ownable, ReentrancyGuard {
     }
 
     /// @inheritdoc IPerpVenue
+    function entryNotional(address account) external view returns (uint256 total) {
+        uint16[] memory open = _openMarkets[account];
+        for (uint256 i; i < open.length; ++i) {
+            Types.Position storage p = _positions[account][open[i]];
+            total += _notional(p.size, p.entryPrice);
+        }
+    }
+
+    /// @inheritdoc IPerpVenue
     function quoteNotional(uint16 marketId, uint256 size) external view returns (uint256) {
         (uint256 mark,) = oracle.price(marketId);
         return _notional(size, mark);

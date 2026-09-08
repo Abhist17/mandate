@@ -129,6 +129,10 @@ contract MandateAccount is ReentrancyGuard {
         _requireTradeable(terms);
 
         // ── 2. position cap ──────────────────────────────────────────────────────
+        // The cap binds on exposure *at entry*. Once a position is open its mark-priced
+        // notional drifts with the market, and a position that grew because the trade went
+        // the trader's way is not a violation — forcing it closed for winning would be
+        // absurd. Adverse drift is what the drawdown floor is for.
         uint256 addedNotional = venue.quoteNotional(marketId, size);
         uint256 projectedNotional = venue.totalNotional(address(this)) + addedNotional;
         uint256 cap = RiskEngine.maxNotional(terms.allocation, terms.maxPositionBps);
