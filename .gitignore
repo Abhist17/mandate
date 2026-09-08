@@ -49,3 +49,5 @@ coverage/
 
 # local fork deploy artefacts
 contracts/broadcast/
+web/.next/
+web/node_modules/

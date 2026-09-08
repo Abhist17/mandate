@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    @apply bg-ink-950 text-txt-hi antialiased;
+    font-feature-settings: "tnum" 1, "cv05" 1;
+  }
+
+  /* Tabular figures everywhere numbers live: a column of prices that shifts width as digits
+     change is a column you cannot scan. */
+  .num {
+    font-variant-numeric: tabular-nums;
+    @apply font-mono;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-ink-950;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded bg-ink-600;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-500;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-lg border border-edge bg-ink-900;
+  }
+  .panel-head {
+    @apply flex items-center justify-between border-b border-edge px-4 py-2.5;
+  }
+  .panel-title {
+    @apply text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo;
+  }
+  .btn {
+    @apply rounded border border-edge bg-ink-800 px-3 py-1.5 text-xs font-medium text-txt-hi
+           transition-colors hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-up {
+    @apply border-up/30 bg-up/10 text-up hover:bg-up/20;
+  }
+  .btn-down {
+    @apply border-down/30 bg-down/10 text-down hover:bg-down/20;
+  }
+  .input {
+    @apply w-full rounded border border-edge bg-ink-950 px-2.5 py-1.5 text-sm text-txt-hi
+           outline-none transition-colors placeholder:text-txt-lo focus:border-ink-500;
+  }
+  .stat-label {
+    @apply text-2xs uppercase tracking-[0.12em] text-txt-lo;
+  }
+  .stat-value {
+    @apply num text-txt-hi;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.live-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
