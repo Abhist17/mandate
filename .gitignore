@@ -46,3 +46,6 @@ Thumbs.db
 # coverage
 lcov.info
 coverage/
+
+# local fork deploy artefacts
+contracts/broadcast/
