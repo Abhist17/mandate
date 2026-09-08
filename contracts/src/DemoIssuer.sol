@@ -28,6 +28,29 @@ import {Errors} from "./libraries/Errors.sol";
 contract DemoIssuer is Ownable, ReentrancyGuard {
     IMandateRegistry public immutable registry;
 
+    /// @notice The models a tester can claim.
+    ///
+    /// @dev Modelled on the account types that actually exist, so a tester can feel the
+    ///      difference between them rather than read about it. Sourced from FundingPips'
+    ///      published 2026 rulebook — see docs/RESEARCH.md §2.
+    ///
+    ///      The three differ in the ways that matter and in no others: how the floor behaves,
+    ///      how tight the daily limit is, what the split is, and whether a consistency rule
+    ///      gates the payout. Running the same trades under `Zero` and under `Evaluation` is
+    ///      the fastest way to understand why traders argue about drawdown type.
+    enum Preset {
+        /// @dev Instant-funded. 5% floor that trails up then locks at the starting size, 3%
+        ///      daily, 95% split — and a 15% consistency rule, the strictest of the three.
+        ///      Best terms, hardest payout.
+        Zero,
+        /// @dev Two-step style. 10% STATIC floor, so profit is yours to give back, 5% daily,
+        ///      80% split, 35% consistency.
+        Evaluation,
+        /// @dev Pro style. 6% static floor, 3% daily, 80% split, no consistency rule at all.
+        ///      Tightest risk, cleanest payout.
+        Pro
+    }
+
     /// @notice Terms every claimed mandate is issued on. Published, fixed, and identical for
     ///         everyone — a tester can read them here before claiming.
     uint256 public allocation = 100_000e6; // 100k, 6-decimal asset
@@ -62,6 +85,7 @@ contract DemoIssuer is Ownable, ReentrancyGuard {
     error ClaimLimitReached(uint256 limit);
 
     event Claimed(address indexed trader, uint256 indexed mandateId, uint256 allocation);
+    event ClaimedPreset(address indexed trader, uint256 indexed mandateId, Preset preset);
     event TermsUpdated(uint256 allocation, uint16 maxDrawdownBps, uint16 dailyLossBps, uint16 profitSplitBps);
     event OpenSet(bool open);
     event MaxClaimsSet(uint256 maxClaims);
@@ -71,20 +95,12 @@ contract DemoIssuer is Ownable, ReentrancyGuard {
         registry = IMandateRegistry(registry_);
     }
 
-    /// @notice Claim a mandate on the published terms. One per address.
+    /// @notice Claim a mandate on the owner-configured terms. One per address.
     /// @dev Issued to `msg.sender`, so a claimer cannot mint mandates to addresses they do not
     ///      control, and cannot claim on someone else's behalf to burn their one allocation.
     /// @return mandateId The new mandate.
     function claim() external nonReentrant returns (uint256 mandateId) {
-        if (!open) revert ClaimsClosed();
-        if (hasClaimed[msg.sender]) revert AlreadyClaimed(msg.sender);
-        if (claimsMade >= maxClaims) revert ClaimLimitReached(maxClaims);
-
-        hasClaimed[msg.sender] = true;
-        claimsMade += 1;
-
-        mandateId = registry.issue(
-            msg.sender,
+        return _claim(
             Types.Terms({
                 allocation: allocation,
                 maxDrawdownBps: maxDrawdownBps,
@@ -100,9 +116,58 @@ contract DemoIssuer is Ownable, ReentrancyGuard {
                 touchIsBreach: touchIsBreach
             })
         );
+    }
 
+    /// @notice Claim a mandate on one of the published {Preset} models.
+    /// @dev Same one-per-address rule as {claim}. The preset is resolved onchain from
+    ///      {presetTerms}, so what a tester picks in the UI is what the registry receives.
+    function claimPreset(Preset preset) external nonReentrant returns (uint256 mandateId) {
+        mandateId = _claim(presetTerms(preset));
+        emit ClaimedPreset(msg.sender, mandateId, preset);
+    }
+
+    /// @notice The exact terms a preset issues. Readable before claiming.
+    /// @dev A pure function of the enum, so the UI cannot show one thing and the chain do
+    ///      another — the terms panel and the issued mandate are the same object.
+    function presetTerms(Preset preset) public view returns (Types.Terms memory t) {
+        t.allocation = allocation;
+        t.maxPositionBps = maxPositionBps;
+        t.expiry = uint64(block.timestamp) + duration;
+        t.resetHourUtc = resetHourUtc;
+        t.touchIsBreach = false;
+
+        if (preset == Preset.Zero) {
+            t.maxDrawdownBps = 500; // 5%
+            t.dailyLossBps = 300; // 3%
+            t.profitSplitBps = 9_500; // 95%
+            t.drawdownMode = Types.DrawdownMode.TrailingUntilBreakeven;
+            t.maxConsistencyBps = 1_500; // 15% — the strict one
+        } else if (preset == Preset.Evaluation) {
+            t.maxDrawdownBps = 1_000; // 10%
+            t.dailyLossBps = 500; // 5%
+            t.profitSplitBps = 8_000; // 80%
+            t.drawdownMode = Types.DrawdownMode.Static;
+            t.maxConsistencyBps = 3_500; // 35%
+        } else {
+            t.maxDrawdownBps = 600; // 6%
+            t.dailyLossBps = 300; // 3%
+            t.profitSplitBps = 8_000; // 80%
+            t.drawdownMode = Types.DrawdownMode.Static;
+            t.maxConsistencyBps = 0; // no consistency rule
+        }
+    }
+
+    function _claim(Types.Terms memory t) internal returns (uint256 mandateId) {
+        if (!open) revert ClaimsClosed();
+        if (hasClaimed[msg.sender]) revert AlreadyClaimed(msg.sender);
+        if (claimsMade >= maxClaims) revert ClaimLimitReached(maxClaims);
+
+        hasClaimed[msg.sender] = true;
+        claimsMade += 1;
+
+        mandateId = registry.issue(msg.sender, t);
         mandateOf[msg.sender] = mandateId;
-        emit Claimed(msg.sender, mandateId, allocation);
+        emit Claimed(msg.sender, mandateId, t.allocation);
     }
 
     /// @notice Whether `who` can claim right now, and why not if they cannot.

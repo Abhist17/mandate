@@ -74,10 +74,16 @@ contract MandateInvariantTest is Fixture {
             Types.MandateState memory s = registry.stateOf(active[i]);
             Types.Terms memory t = registry.termsOf(active[i]);
 
-            uint256 tf = RiskEngine.trailingFloor(s.highWaterMark, t.maxDrawdownBps);
-            uint256 df = RiskEngine.dailyFloor(s.dayStartEquity, t.dailyLossBps);
+            // Must use the mandate's own drawdown mode and daily basis. An earlier version
+            // assumed pure trailing and broke as soon as the handler started issuing static
+            // mandates — it was comparing against a floor that mandate was never under.
+            uint256 tf = RiskEngine.drawdownFloor(
+                s.highWaterMark, t.allocation, t.maxDrawdownBps, t.drawdownMode
+            );
+            uint256 df =
+                RiskEngine.dailyFloorFromBasis(s.dayStartEquity, s.dayStartBalance, t.dailyLossBps);
 
-            assertGe(s.lastMarkedEquity, tf, "active mandate below its trailing floor");
+            assertGe(s.lastMarkedEquity, tf, "active mandate below its drawdown floor");
             assertGe(s.lastMarkedEquity, df, "active mandate below its daily floor");
         }
     }

@@ -9,6 +9,37 @@ import {fmtUsd, fmtPct} from "@/lib/format";
 import {Panel} from "@/components/ui";
 
 /**
+ * The models a tester can claim, mirroring DemoIssuer.Preset. Terms are read from the
+ * contract, not from this table — the copy here only explains the trade-off each one makes.
+ */
+const PRESETS = [
+  {
+    id: 0,
+    name: "Zero",
+    tagline: "Best split, hardest payout",
+    blurb: "Instant funded. The floor trails up then locks at your starting size. A 15% consistency rule gates every withdrawal.",
+  },
+  {
+    id: 1,
+    name: "Evaluation",
+    tagline: "Profit is yours to give back",
+    blurb: "A static floor that never moves, so a good run cannot be taken away by the floor chasing you up. 35% consistency rule.",
+  },
+  {
+    id: 2,
+    name: "Pro",
+    tagline: "Tightest risk, cleanest payout",
+    blurb: "A 6% static floor and a 3% daily limit — but no consistency rule at all. Nothing gates the withdrawal.",
+  },
+] as const;
+
+const DRAWDOWN_MODE: Record<number, string> = {
+  0: "static",
+  1: "trailing",
+  2: "trailing to breakeven",
+};
+
+/**
  * Self-serve mandate claim.
  *
  * The point of this component is that a stranger can go from landing on the page to trading
@@ -18,6 +49,7 @@ import {Panel} from "@/components/ui";
 export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => void}) {
   const {address, client, wrongChain, connect, available} = useWallet();
   const [busy, setBusy] = useState(false);
+  const [preset, setPreset] = useState<number>(0);
   const [msg, setMsg] = useState<{kind: "ok" | "err"; text: string; hash?: string}>();
 
   const {data, refresh} = usePolled(async () => {
@@ -38,10 +70,28 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
       publicClient.readContract({address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "claimsMade"}),
       publicClient.readContract({address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "maxClaims"}),
     ]);
-    const [allocation, dd, daily, split, pos] = terms as unknown as [bigint, number, number, number, number];
+    const [allocation, , , , pos] = terms as unknown as [bigint, number, number, number, number];
     const [claimable, reason] = status as readonly [boolean, string];
+
+    // Read every preset's real terms from the contract, so the card shows what the chain
+    // will actually issue rather than a hardcoded table that can drift out of date.
+    const presetTerms = await Promise.all(
+      PRESETS.map(
+        (p) =>
+          publicClient.readContract({
+            address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "presetTerms", args: [p.id],
+          }) as Promise<{
+            maxDrawdownBps: number;
+            dailyLossBps: number;
+            profitSplitBps: number;
+            drawdownMode: number;
+            maxConsistencyBps: number;
+          }>,
+      ),
+    );
+
     return {
-      allocation, dd, daily, split, pos, claimable, reason,
+      allocation, pos, claimable, reason, presetTerms,
       made: made as bigint, max: max as bigint,
     };
   }, 8_000, [address]);
@@ -55,7 +105,7 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
     try {
       const hash = await client.writeContract({
         account: address, chain: null,
-        address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "claim", args: [],
+        address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "claimPreset", args: [preset],
       });
       await publicClient.waitForTransactionReceipt({hash});
       const id = (await publicClient.readContract({
@@ -99,14 +149,49 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
           is the thing worth trying to break.
         </p>
 
-        {data && (
+        {/* Pick a model. The three differ in the ways traders actually argue about. */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {PRESETS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setPreset(p.id)}
+              className={`rounded border px-2 py-2 text-left transition-colors ${
+                preset === p.id
+                  ? "border-ink-500 bg-ink-800"
+                  : "border-edge bg-ink-950 hover:border-ink-600"
+              }`}
+            >
+              <div className="text-xs font-semibold text-txt-hi">{p.name}</div>
+              <div className="mt-0.5 text-2xs leading-tight text-txt-lo">{p.tagline}</div>
+            </button>
+          ))}
+        </div>
+
+        <p className="text-2xs leading-relaxed text-txt-mid">{PRESETS[preset]!.blurb}</p>
+
+        {data?.presetTerms[preset] && (
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded border border-edge bg-ink-950 px-3 py-2.5 text-2xs">
             <Term label="Allocation" value={fmtUsd(data.allocation)} />
-            <Term label="Max drawdown" value={`${fmtPct(data.dd)} trailing`} />
-            <Term label="Daily loss" value={fmtPct(data.daily)} />
+            <Term
+              label="Max drawdown"
+              value={`${fmtPct(data.presetTerms[preset]!.maxDrawdownBps)} ${
+                DRAWDOWN_MODE[data.presetTerms[preset]!.drawdownMode] ?? ""
+              }`}
+            />
+            <Term label="Daily loss" value={fmtPct(data.presetTerms[preset]!.dailyLossBps)} />
             <Term label="Position cap" value={`${data.pos / 10000}x`} />
-            <Term label="Profit split" value={`${fmtPct(data.split)} to you`} />
-            <Term label="Term" value="7 days" />
+            <Term
+              label="Profit split"
+              value={`${fmtPct(data.presetTerms[preset]!.profitSplitBps)} to you`}
+            />
+            <Term
+              label="Consistency"
+              value={
+                data.presetTerms[preset]!.maxConsistencyBps === 0
+                  ? "none"
+                  : `max ${fmtPct(data.presetTerms[preset]!.maxConsistencyBps)}`
+              }
+            />
           </div>
         )}
 
@@ -124,7 +209,11 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
             disabled={busy || wrongChain || !data?.claimable}
             className="btn btn-up w-full py-2"
           >
-            {busy ? "Claiming…" : data?.claimable ? "Claim a mandate" : (data?.reason ?? "…")}
+            {busy
+              ? "Claiming…"
+              : data?.claimable
+                ? `Claim a ${PRESETS[preset]!.name} mandate`
+                : (data?.reason ?? "…")}
           </button>
         )}
 

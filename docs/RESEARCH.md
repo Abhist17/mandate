@@ -149,14 +149,28 @@ So the integration is viable — it was only ever a version problem.
 
 ## 4. Consolidated action list
 
-| # | Action | Judging impact |
-|---|---|---|
-| 1 | Rewrite positioning: name the competitors, claim onchain *enforcement*, not onchain prop firms | Founder & Market Readiness (25%), Originality (15%) |
-| 2 | Implement the consistency rule as an encoded payout condition | Originality (15%), Technical (20%), and it is the pitch |
-| 3 | Add static drawdown, trailing lock, correct daily basis | Technical (20%), domain credibility |
-| 4 | Add payout conditions: min profitable days, safety cushion | Originality, completeness |
-| 5 | Migrate the indexer to Envio V3 | Envio bounty — currently broken |
-| 6 | Preset mandate templates matching real models (Zero, 1-Step, 2-Step) | Design & Craft (20%), legibility |
+| # | Action | Judging impact | Status |
+|---|---|---|---|
+| 1 | Rewrite positioning: name the competitors, claim onchain *enforcement*, not onchain prop firms | Founder & Market Readiness (25%), Originality (15%) | ✅ done |
+| 2 | Implement the consistency rule as an encoded payout condition | Originality (15%), Technical (20%), and it is the pitch | ✅ done |
+| 3 | Add static drawdown, trailing lock, correct daily basis | Technical (20%), domain credibility | ✅ done |
+| 4 | Add payout conditions: min profitable days, safety cushion | Originality, completeness | ✅ done |
+| 5 | Migrate the indexer to Envio V3 | Envio bounty — was broken | ✅ done, codegen + typecheck pass |
+| 6 | Preset mandate templates matching real models | Design & Craft (20%), legibility | ✅ done — Zero / Evaluation / Pro |
+
+### What changed as a result
+
+- `RiskEngine` gained `drawdownFloor` (three modes), `dailyFloorFromBasis`, `consistencyBps`
+  and `checkPayout`; `evaluate` now does day-close accounting so a day's gain is booked at its
+  close, which is what the consistency rule needs.
+- `MandateRegistry` gained `payoutEligibility()` and `consistencyScore()`, and `closeMandate`
+  is gated on them. The owner cannot override — checked by a test.
+- `DemoIssuer` gained three preset models, resolved onchain via `presetTerms()` so the UI
+  cannot advertise one thing and the chain issue another.
+- The trader screen shows the consistency *working* — biggest day ÷ total profit ÷ threshold —
+  not just a verdict.
+- Test count went 193 → 227. The invariant suite now randomises drawdown mode, which caught a
+  stale invariant that assumed pure trailing.
 
 ---
 

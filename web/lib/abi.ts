@@ -453,6 +453,38 @@ export const demoIssuerAbi = [
   {type: "function", name: "claim", inputs: [], outputs: [{type: "uint256"}], stateMutability: "nonpayable"},
   {
     type: "function",
+    name: "claimPreset",
+    inputs: [{name: "preset", type: "uint8"}],
+    outputs: [{type: "uint256"}],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "presetTerms",
+    inputs: [{name: "preset", type: "uint8"}],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          {name: "allocation", type: "uint256"},
+          {name: "maxDrawdownBps", type: "uint16"},
+          {name: "dailyLossBps", type: "uint16"},
+          {name: "profitSplitBps", type: "uint16"},
+          {name: "maxPositionBps", type: "uint16"},
+          {name: "expiry", type: "uint64"},
+          {name: "resetHourUtc", type: "uint8"},
+          {name: "drawdownMode", type: "uint8"},
+          {name: "maxConsistencyBps", type: "uint16"},
+          {name: "minProfitableDays", type: "uint16"},
+          {name: "payoutCushionBps", type: "uint16"},
+          {name: "touchIsBreach", type: "bool"},
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "claimStatus",
     inputs: [{name: "who", type: "address"}],
     outputs: [

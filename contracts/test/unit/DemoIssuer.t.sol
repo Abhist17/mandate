@@ -194,4 +194,87 @@ contract DemoIssuerTest is Fixture {
         vm.expectRevert(Errors.ZeroAddress.selector);
         new DemoIssuer(owner, address(0));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  Preset models
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// @dev The presets exist so a tester can feel the difference between account models
+    ///      rather than read about it. They must differ in the ways that matter.
+    function test_presets_differInTheWaysThatMatter() public view {
+        Types.Terms memory zero = issuer.presetTerms(DemoIssuer.Preset.Zero);
+        Types.Terms memory evaluation = issuer.presetTerms(DemoIssuer.Preset.Evaluation);
+        Types.Terms memory pro = issuer.presetTerms(DemoIssuer.Preset.Pro);
+
+        // Zero: best split, tightest floor, strictest payout gate.
+        assertEq(zero.profitSplitBps, 9_500);
+        assertEq(zero.maxDrawdownBps, 500);
+        assertEq(uint8(zero.drawdownMode), uint8(Types.DrawdownMode.TrailingUntilBreakeven));
+        assertEq(zero.maxConsistencyBps, 1_500);
+
+        // Evaluation: static floor, so profit is yours to give back.
+        assertEq(uint8(evaluation.drawdownMode), uint8(Types.DrawdownMode.Static));
+        assertEq(evaluation.maxDrawdownBps, 1_000);
+        assertEq(evaluation.maxConsistencyBps, 3_500);
+
+        // Pro: tightest risk, cleanest payout — no consistency rule at all.
+        assertEq(pro.maxDrawdownBps, 600);
+        assertEq(pro.maxConsistencyBps, 0);
+
+        assertGt(zero.profitSplitBps, evaluation.profitSplitBps, "Zero pays the most");
+        assertLt(zero.maxConsistencyBps, evaluation.maxConsistencyBps, "and gates it hardest");
+    }
+
+    function test_presets_areClaimableAndIssueExactlyWhatTheyAdvertise() public {
+        Types.Terms memory advertised = issuer.presetTerms(DemoIssuer.Preset.Zero);
+
+        vm.prank(tester1);
+        uint256 id = issuer.claimPreset(DemoIssuer.Preset.Zero);
+
+        Types.Terms memory issued = registry.termsOf(id);
+        assertEq(issued.maxDrawdownBps, advertised.maxDrawdownBps);
+        assertEq(issued.dailyLossBps, advertised.dailyLossBps);
+        assertEq(issued.profitSplitBps, advertised.profitSplitBps);
+        assertEq(issued.maxConsistencyBps, advertised.maxConsistencyBps);
+        assertEq(uint8(issued.drawdownMode), uint8(advertised.drawdownMode));
+    }
+
+    /// @dev The one-per-address rule covers presets too, or a tester could claim three.
+    function test_presets_shareTheOnePerAddressLimit() public {
+        vm.startPrank(tester1);
+        issuer.claimPreset(DemoIssuer.Preset.Zero);
+        vm.expectRevert(abi.encodeWithSelector(DemoIssuer.AlreadyClaimed.selector, tester1));
+        issuer.claimPreset(DemoIssuer.Preset.Pro);
+        vm.expectRevert(abi.encodeWithSelector(DemoIssuer.AlreadyClaimed.selector, tester1));
+        issuer.claim();
+        vm.stopPrank();
+    }
+
+    function test_presets_allThreeIssueValidTerms() public {
+        DemoIssuer.Preset[3] memory presets =
+            [DemoIssuer.Preset.Zero, DemoIssuer.Preset.Evaluation, DemoIssuer.Preset.Pro];
+        for (uint256 i; i < 3; ++i) {
+            address who = address(uint160(0x5000 + i));
+            vm.prank(who);
+            uint256 id = issuer.claimPreset(presets[i]);
+            assertTrue(registry.isActive(id), "every preset issues a live mandate");
+        }
+    }
+
+    /// @dev A Zero-style mandate is instantly payable at break-even and gated once a single
+    ///      day dominates the profit. Same trades, different model, different answer.
+    function test_presets_zeroGatesThePayoutHarderThanPro() public {
+        vm.prank(tester1);
+        uint256 zeroId = issuer.claimPreset(DemoIssuer.Preset.Zero);
+        vm.prank(tester2);
+        uint256 proId = issuer.claimPreset(DemoIssuer.Preset.Pro);
+
+        assertEq(registry.termsOf(zeroId).maxConsistencyBps, 1_500);
+        assertEq(registry.termsOf(proId).maxConsistencyBps, 0, "Pro never withholds on consistency");
+
+        (bool zeroOk,) = registry.payoutEligibility(zeroId);
+        (bool proOk,) = registry.payoutEligibility(proId);
+        assertTrue(zeroOk, "no profit yet, so nothing to withhold");
+        assertTrue(proOk);
+    }
 }
