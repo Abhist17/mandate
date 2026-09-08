@@ -51,3 +51,4 @@ coverage/
 contracts/broadcast/
 web/.next/
 web/node_modules/
+DEPLOYMENT.md

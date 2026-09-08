@@ -41,6 +41,21 @@ contract Deploy is Script {
     /// @notice Seeded into the pool as LP capital for the demo.
     uint256 constant POOL_SEED = 5_000_000 * ONE;
 
+    /// @dev Held as state rather than passed around: the writer needs eight addresses and
+    ///      Solidity's legacy pipeline runs out of stack slots well before that.
+    struct Deployed {
+        address asset;
+        address oracle;
+        address venue;
+        address accountImpl;
+        address registry;
+        address pool;
+        address deployer;
+        address keeper;
+    }
+
+    Deployed internal d;
+
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(pk);
@@ -120,5 +135,59 @@ contract Deploy is Script {
         console2.log("CAPITAL_POOL_ADDRESS        =", address(pool));
         console2.log("");
         console2.log("Next: push a first price, then run `make seed`.");
+
+        d = Deployed({
+            asset: address(assetToken),
+            oracle: address(oracle),
+            venue: address(venue),
+            accountImpl: address(accountImpl),
+            registry: address(registry),
+            pool: address(pool),
+            deployer: deployer,
+            keeper: keeper
+        });
+        _writeDeploymentFile();
+    }
+
+    /// @dev Writes DEPLOYMENT.md so a judge has the addresses without scrolling back through
+    ///      forge output, and so the repo carries a record of what is actually live.
+    function _writeDeploymentFile() internal {
+        string memory rows = string.concat(
+            _row("CapitalPool", d.pool),
+            _row("MandateRegistry", d.registry),
+            _row("MandateAccount impl", d.accountImpl),
+            _row("MiniPerp", d.venue),
+            _row("PriceOracle", d.oracle),
+            _row("Asset (mUSD)", d.asset)
+        );
+
+        string memory env = string.concat(
+            "POOL_ASSET_ADDRESS=", vm.toString(d.asset), "\n",
+            "ORACLE_ADDRESS=", vm.toString(d.oracle), "\n",
+            "MINI_PERP_ADDRESS=", vm.toString(d.venue), "\n",
+            "MANDATE_ACCOUNT_IMPL_ADDRESS=", vm.toString(d.accountImpl), "\n",
+            "MANDATE_REGISTRY_ADDRESS=", vm.toString(d.registry), "\n",
+            "CAPITAL_POOL_ADDRESS=", vm.toString(d.pool), "\n",
+            "INDEXER_START_BLOCK=", vm.toString(block.number), "\n"
+        );
+
+        string memory out = string.concat(
+            "# Mandate - live deployment\n\n",
+            "Monad testnet, chain ", vm.toString(block.chainid),
+            ". Deployed at block ", vm.toString(block.number), ".\n\n",
+            "| Contract | Address |\n|---|---|\n", rows, "\n",
+            "Deployer `", vm.toString(d.deployer), "` - keeper `", vm.toString(d.keeper), "`\n\n",
+            "## .env\n\n```\n", env, "```\n\n",
+            "See [DEPLOY.md](DEPLOY.md) for what to do with these.\n"
+        );
+
+        vm.writeFile("../DEPLOYMENT.md", out);
+    }
+
+    function _row(string memory name, address a) internal pure returns (string memory) {
+        return string.concat(
+            "| ", name, " | [`", vm.toString(a),
+            "`](https://testnet.monadscan.com/address/", vm.toString(a), ") |\n"
+        );
     }
 }
