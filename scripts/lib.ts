@@ -53,16 +53,18 @@ export const abis = {
     "function setPublisher(address publisher, bool allowed)",
   ]),
   registry: parseAbi([
-    "function issue(address trader, (uint256,uint16,uint16,uint16,uint16,uint64,uint8) terms) returns (uint256)",
+    "function issue(address trader, (uint256,uint16,uint16,uint16,uint16,uint64,uint8,uint8,uint16,uint16,uint16,bool) terms) returns (uint256)",
     "function markAndEnforce(uint256 mandateId) returns (bool)",
-    "function stateOf(uint256) view returns ((address,address,uint256,uint256,uint64,uint256,uint64,uint64,uint8,uint8))",
-    "function termsOf(uint256) view returns ((uint256,uint16,uint16,uint16,uint16,uint64,uint8))",
+    "function stateOf(uint256) view returns ((address,address,uint256,uint256,uint256,uint64,uint256,uint64,uint64,uint256,uint32,uint32,uint8,uint8))",
+    "function termsOf(uint256) view returns ((uint256,uint16,uint16,uint16,uint16,uint64,uint8,uint8,uint16,uint16,uint16,bool))",
     "function headroom(uint256) view returns (uint256,uint256)",
     "function floorOf(uint256) view returns (uint256,uint256)",
     "function liveEquity(uint256) view returns (uint256)",
     "function activeMandates() view returns (uint256[])",
     "function setIssuer(address,bool)",
     "function closeMandate(uint256)",
+    "function payoutEligibility(uint256) view returns (bool,uint8)",
+    "function consistencyScore(uint256) view returns (uint256)",
   ]),
   account: parseAbi([
     "function openPosition(uint16 marketId, bool isLong, uint256 size, uint256 limitPrice) returns (uint256)",
@@ -106,6 +108,12 @@ export const c = {
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Matches Types.DrawdownMode. */
+export const DrawdownMode = {Static: 0, Trailing: 1, TrailingUntilBreakeven: 2} as const;
+
+/** Matches Types.PayoutBlock. */
+export const PAYOUT_BLOCK = ["None", "Consistency", "ProfitableDays", "Cushion"] as const;
+
 /** Terms tuple in the order MandateRegistry.issue expects. */
 export function terms(o: {
   allocation: bigint;
@@ -115,6 +123,11 @@ export function terms(o: {
   maxPositionBps: number;
   expiry: bigint;
   resetHourUtc?: number;
+  drawdownMode?: number;
+  maxConsistencyBps?: number;
+  minProfitableDays?: number;
+  payoutCushionBps?: number;
+  touchIsBreach?: boolean;
 }) {
   return [
     o.allocation,
@@ -124,5 +137,10 @@ export function terms(o: {
     o.maxPositionBps,
     o.expiry,
     o.resetHourUtc ?? 0,
+    o.drawdownMode ?? DrawdownMode.Trailing,
+    o.maxConsistencyBps ?? 0,
+    o.minProfitableDays ?? 0,
+    o.payoutCushionBps ?? 0,
+    o.touchIsBreach ?? false,
   ] as const;
 }

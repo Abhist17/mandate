@@ -79,6 +79,14 @@ contract Deploy is Script {
             assetToken = new MockERC20("Mandate USD", "mUSD", 6);
             console2.log("Asset (deployed):", address(assetToken));
         } else {
+            // Guard against a stale address left in .env from a previous deployment. Without
+            // this the script reverts several calls later with "call to non-contract address",
+            // which points at the wrong thing entirely.
+            if (assetAddr.code.length == 0) {
+                console2.log("POOL_ASSET_ADDRESS has no code on this chain:", assetAddr);
+                console2.log("Clear it from .env to deploy a fresh asset, or point it at a real token.");
+                revert("POOL_ASSET_ADDRESS is not a contract on this chain");
+            }
             assetToken = MockERC20(assetAddr);
             console2.log("Asset (existing):", address(assetToken));
         }

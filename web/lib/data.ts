@@ -13,6 +13,11 @@ export type Terms = {
   maxPositionBps: number;
   expiry: bigint;
   resetHourUtc: number;
+  drawdownMode: number; // 0 Static, 1 Trailing, 2 TrailingUntilBreakeven
+  maxConsistencyBps: number;
+  minProfitableDays: number;
+  payoutCushionBps: number;
+  touchIsBreach: boolean;
 };
 
 export type MandateState = {
@@ -20,10 +25,14 @@ export type MandateState = {
   account: Address;
   highWaterMark: bigint;
   dayStartEquity: bigint;
+  dayStartBalance: bigint;
   dayStartTime: bigint;
   lastMarkedEquity: bigint;
   lastMarkedAt: bigint;
   issuedAt: bigint;
+  largestDailyGain: bigint;
+  profitableDays: number;
+  tradingDays: number;
   status: number;
   breachKind: number;
 };
@@ -38,6 +47,9 @@ export type Mandate = {
   headroomBps: bigint;
   notional: bigint;
   positions: Position[];
+  consistencyBps: bigint;
+  payoutOk: boolean;
+  payoutBlock: number; // 0 None, 1 Consistency, 2 ProfitableDays, 3 Cushion
 };
 
 export type Position = {
@@ -70,6 +82,11 @@ function tupleToTerms(t: readonly unknown[]): Terms {
     maxPositionBps: Number(t[4]),
     expiry: t[5] as bigint,
     resetHourUtc: Number(t[6]),
+    drawdownMode: Number(t[7]),
+    maxConsistencyBps: Number(t[8]),
+    minProfitableDays: Number(t[9]),
+    payoutCushionBps: Number(t[10]),
+    touchIsBreach: Boolean(t[11]),
   };
 }
 
@@ -79,12 +96,16 @@ function tupleToState(t: readonly unknown[]): MandateState {
     account: t[1] as Address,
     highWaterMark: t[2] as bigint,
     dayStartEquity: t[3] as bigint,
-    dayStartTime: t[4] as bigint,
-    lastMarkedEquity: t[5] as bigint,
-    lastMarkedAt: t[6] as bigint,
-    issuedAt: t[7] as bigint,
-    status: Number(t[8]),
-    breachKind: Number(t[9]),
+    dayStartBalance: t[4] as bigint,
+    dayStartTime: t[5] as bigint,
+    lastMarkedEquity: t[6] as bigint,
+    lastMarkedAt: t[7] as bigint,
+    issuedAt: t[8] as bigint,
+    largestDailyGain: t[9] as bigint,
+    profitableDays: Number(t[10]),
+    tradingDays: Number(t[11]),
+    status: Number(t[12]),
+    breachKind: Number(t[13]),
   };
 }
 
@@ -170,7 +191,22 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
   const [floor] = floorTuple as readonly [bigint, bigint];
   const [headroom, headroomBps] = headroomTuple as readonly [bigint, bigint];
 
-  return {id, terms, state, liveEquity, floor, headroom, headroomBps, notional, positions};
+  // The consistency score and payout verdict — the numbers a prop firm computes in private.
+  const [consistencyBps, eligibility] = await Promise.all([
+    publicClient.readContract({
+      address: ADDR.registry, abi: registryAbi, functionName: "consistencyScore", args: [id],
+    }) as Promise<bigint>,
+    publicClient.readContract({
+      address: ADDR.registry, abi: registryAbi, functionName: "payoutEligibility", args: [id],
+    }) as Promise<readonly [boolean, number]>,
+  ]);
+
+  return {
+    id, terms, state, liveEquity, floor, headroom, headroomBps, notional, positions,
+    consistencyBps,
+    payoutOk: eligibility[0],
+    payoutBlock: Number(eligibility[1]),
+  };
 }
 
 export async function fetchActiveIds(): Promise<bigint[]> {

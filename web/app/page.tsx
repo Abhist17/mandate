@@ -4,6 +4,7 @@ import {useEffect, useMemo, useState} from "react";
 import {EquityChart} from "@/components/EquityChart";
 import {TradePanel} from "@/components/TradePanel";
 import {ClaimMandate} from "@/components/ClaimMandate";
+import {PayoutPanel} from "@/components/PayoutPanel";
 import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty} from "@/components/ui";
 import {fetchActiveIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
@@ -288,11 +289,21 @@ function TraderDetail({
         <Panel title="Mandate terms" right={<StatusPill status={state.status} />}>
           <div className="divide-y divide-edge px-4 py-1">
             <Field label="Allocation" value={fmtUsd(terms.allocation)} />
-            <Field label="Max drawdown" value={`${fmtPct(terms.maxDrawdownBps)} trailing`} />
+            <Field
+              label="Max drawdown"
+              value={`${fmtPct(terms.maxDrawdownBps)} ${DRAWDOWN_MODE[terms.drawdownMode] ?? ""}`}
+            />
             <Field label="Daily loss limit" value={fmtPct(terms.dailyLossBps)} />
             <Field label="Position cap" value={`${terms.maxPositionBps / 10000}x`} />
             <Field label="Profit split" value={`${fmtPct(terms.profitSplitBps)} to trader`} />
+            {terms.maxConsistencyBps > 0 && (
+              <Field label="Consistency rule" value={`max ${fmtPct(terms.maxConsistencyBps)}`} />
+            )}
+            {terms.minProfitableDays > 0 && (
+              <Field label="Min profitable days" value={String(terms.minProfitableDays)} />
+            )}
             <Field label="Daily reset" value={`${String(terms.resetHourUtc).padStart(2, "0")}:00 UTC`} />
+            <Field label="Floor touch" value={terms.touchIsBreach ? "breaches" : "survives"} />
             <Field label="Expires" value={fmtCountdown(terms.expiry)} />
           </div>
           <div className="border-t border-edge px-4 py-2.5 text-2xs text-txt-lo">
@@ -303,6 +314,8 @@ function TraderDetail({
         <Panel title="Trade">
           <TradePanel mandate={mandate} onDone={onDone} />
         </Panel>
+
+        <PayoutPanel mandate={mandate} />
 
         <Panel title="Account">
           <div className="divide-y divide-edge px-4 py-1">
@@ -369,6 +382,13 @@ function PositionsTable({mandate}: {mandate: Mandate}) {
     </Panel>
   );
 }
+
+/** Matches Types.DrawdownMode. */
+const DRAWDOWN_MODE: Record<number, string> = {
+  0: "static",
+  1: "trailing",
+  2: "trailing to breakeven",
+};
 
 function Legend() {
   const items = [

@@ -165,9 +165,9 @@ async function main() {
     address: a.venue, abi: abis.venue, functionName: "openMarkets", args: [accountAddr],
   });
 
-  tick(`status      ${c.red}${STATUS[Number(finalState[8])]}${c.r}`);
-  tick(`reason      ${BREACH[Number(finalState[9])]}`);
-  tick(`equity      ${usd(finalState[5])}`);
+  tick(`status      ${c.red}${STATUS[Number(finalState[12])]}${c.r}`);
+  tick(`reason      ${BREACH[Number(finalState[13])]}`);
+  tick(`equity      ${usd(finalState[6])}`);
   tick(`positions   ${openAfter.length} open — flattened in the same transaction`);
   tick(`gas         ${enforceReceipt.gasUsed}`);
 
