@@ -212,8 +212,20 @@ function TraderDetail({
           right={
             <div className="flex items-center gap-3">
               <Legend />
-              <span className="text-2xs text-txt-lo">
-                {curve.length} marks · {curveSource === "envio" ? "Envio" : "RPC"}
+              <span
+                className="text-2xs text-txt-lo"
+                title={
+                  curveSource === "envio"
+                    ? "Full history, indexed by Envio HyperIndex"
+                    : "Monad's public RPC caps eth_getLogs at a 100-block range, so this fallback shows only recent history. Run the Envio indexer for the full curve."
+                }
+              >
+                {curve.length} marks ·{" "}
+                {curveSource === "envio" ? (
+                  <span className="text-up">Envio</span>
+                ) : (
+                  <span className="text-warn">RPC (recent only)</span>
+                )}
               </span>
               <LiveDot on={active} />
             </div>
