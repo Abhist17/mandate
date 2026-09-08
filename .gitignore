@@ -52,3 +52,6 @@ contracts/broadcast/
 web/.next/
 web/node_modules/
 DEPLOYMENT.md
+indexer/.envio/
+indexer/envio-env.d.ts
+indexer/generated/

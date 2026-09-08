@@ -40,13 +40,33 @@ the event already carries, and computing them here means the chart does not have
 Because that function is permissionless, this column is the evidence that enforcement is not
 ours to withhold.
 
+## Version
+
+HyperIndex **V3** (`envio@3.10`). The V2 → V3 differences that matter here, all verified
+against the installed package's type definitions rather than against docs:
+
+| | V2 | V3 |
+|---|---|---|
+| Networks | `networks:` | `chains:` |
+| Registration | `Contract.Event.handler(fn)` | `indexer.onEvent({contract, event}, fn)` |
+| Codegen output | `generated/` | `.envio/` + `envio-env.d.ts` |
+| Transaction fields | included | opt-in via `field_selection.transaction_fields` |
+
+One correction worth recording: the migration guide suggests entities move to
+`context.chain.Entity.set`. They do not — `chain` is only `{id, isRealtime}`, and entities
+stay on `context` directly. The generated types are the authority.
+
 ## Run
 
 ```bash
 cd indexer
 npm install
+npm run codegen    # writes .envio/ types from config.yaml + schema.graphql
 npm run dev        # syncs addresses from ../.env, then starts Envio
 ```
+
+`npm run codegen` passing is a real check: it validates the config, the schema, and every
+event signature against the ABI shape.
 
 GraphQL lands on `http://localhost:8080/v1/graphql`. Point the frontend at it with:
 

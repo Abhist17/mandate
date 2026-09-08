@@ -1,53 +1,46 @@
 /**
- * Envio HyperIndex handlers for Mandate.
+ * Envio HyperIndex handlers for Mandate. HyperIndex V3.
  *
- * Every handler is pure bookkeeping over events the contracts already emit — the contracts
- * were written with this in mind (SPEC §Phase 2: "events on every state transition, the
- * indexer depends on these"), so nothing here needs to re-derive protocol state from calls.
+ * Every handler is bookkeeping over events the contracts already emit — the contracts were
+ * written with this in mind (SPEC §Phase 2: "events on every state transition, the indexer
+ * depends on these"), so nothing here re-derives protocol state from contract calls.
  *
- * The one piece of real logic is `effectiveFloor` / `headroom` on each mark. Those are
- * computed here rather than stored onchain because they are pure functions of values the
- * event already carries, and computing them at index time means the chart does not have to.
+ * The only real logic is `effectiveFloor` and `headroom` on each mark. Both are pure
+ * functions of values the event already carries, so computing them at index time means the
+ * chart does not have to.
+ *
+ * V3 note: handlers register through `indexer.onEvent({contract, event}, fn)`, and entities
+ * live directly on `context` (`context.Mandate.set`), not under `context.chain` — `chain` is
+ * only `{id, isRealtime}`. Confirmed against the generated types rather than the docs.
  */
 
-import {
-  MandateRegistry,
-  MiniPerp,
-  CapitalPool,
-  type Mandate,
-  type ProtocolStats,
-} from "generated";
+import {indexer} from "envio";
 
 const GLOBAL = "global";
 
 const max = (a: bigint, b: bigint): bigint => (a > b ? a : b);
 
-async function stats(context: {ProtocolStats: {get: (id: string) => Promise<ProtocolStats | undefined>}}) {
-  const existing = await context.ProtocolStats.get(GLOBAL);
-  return (
-    existing ?? {
-      id: GLOBAL,
-      mandatesIssued: 0,
-      mandatesActive: 0,
-      mandatesBreached: 0,
-      mandatesSettled: 0,
-      totalMarks: 0,
-      totalAllocated: 0n,
-      totalTraderPayouts: 0n,
-      totalPoolReturns: 0n,
-      lastUpdated: 0n,
-    }
-  );
-}
+const EMPTY_STATS = {
+  id: GLOBAL,
+  mandatesIssued: 0,
+  mandatesActive: 0,
+  mandatesBreached: 0,
+  mandatesSettled: 0,
+  totalMarks: 0,
+  totalAllocated: 0n,
+  totalTraderPayouts: 0n,
+  totalPoolReturns: 0n,
+  lastUpdated: 0n,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Registry
 // ─────────────────────────────────────────────────────────────────────────────
 
-MandateRegistry.MandateIssued.handler(async ({event, context}) => {
+indexer.onEvent({contract: "MandateRegistry", event: "MandateIssued"}, async ({event, context}) => {
   const id = event.params.mandateId.toString();
 
-  const mandate: Mandate = {
+  context.Mandate.set({
     id,
     mandateId: event.params.mandateId,
     trader: event.params.trader,
@@ -73,10 +66,9 @@ MandateRegistry.MandateIssued.handler(async ({event, context}) => {
     poolReturn: undefined,
     settledAt: undefined,
     settledTx: undefined,
-  };
-  context.Mandate.set(mandate);
+  });
 
-  const s = await stats(context);
+  const s = (await context.ProtocolStats.get(GLOBAL)) ?? EMPTY_STATS;
   context.ProtocolStats.set({
     ...s,
     mandatesIssued: s.mandatesIssued + 1,
@@ -86,11 +78,11 @@ MandateRegistry.MandateIssued.handler(async ({event, context}) => {
   });
 });
 
-MandateRegistry.EquityMarked.handler(async ({event, context}) => {
+indexer.onEvent({contract: "MandateRegistry", event: "EquityMarked"}, async ({event, context}) => {
   const mandateId = event.params.mandateId.toString();
 
-  // The binding constraint is whichever floor is higher — that is what `breached` compares
-  // against in RiskEngine.evaluate, and what the trader's headroom readout must reflect.
+  // The binding constraint is whichever floor is higher — that is what RiskEngine.evaluate
+  // compares against, and what the trader's headroom readout must reflect.
   const effectiveFloor = max(event.params.trailingFloor, event.params.dailyFloor);
   const headroom =
     event.params.equity > effectiveFloor ? event.params.equity - effectiveFloor : 0n;
@@ -124,7 +116,7 @@ MandateRegistry.EquityMarked.handler(async ({event, context}) => {
     });
   }
 
-  const s = await stats(context);
+  const s = (await context.ProtocolStats.get(GLOBAL)) ?? EMPTY_STATS;
   context.ProtocolStats.set({
     ...s,
     totalMarks: s.totalMarks + 1,
@@ -132,9 +124,9 @@ MandateRegistry.EquityMarked.handler(async ({event, context}) => {
   });
 });
 
-MandateRegistry.DayRolled.handler(async ({event, context}) => {
-  // Recorded for completeness: a rollover resets the daily floor's base, which is visible on
-  // the chart as a step in the floor line and is otherwise unexplained.
+indexer.onEvent({contract: "MandateRegistry", event: "DayRolled"}, async ({event, context}) => {
+  // A rollover resets the daily floor's base, which shows on the chart as a step in the floor
+  // line and is otherwise unexplained.
   context.PoolEvent.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     kind: "day-rolled",
@@ -146,7 +138,7 @@ MandateRegistry.DayRolled.handler(async ({event, context}) => {
   });
 });
 
-MandateRegistry.Breached.handler(async ({event, context}) => {
+indexer.onEvent({contract: "MandateRegistry", event: "Breached"}, async ({event, context}) => {
   const mandateId = event.params.mandateId.toString();
   const mandate = await context.Mandate.get(mandateId);
 
@@ -167,7 +159,7 @@ MandateRegistry.Breached.handler(async ({event, context}) => {
     context.Mandate.set({...mandate, breachKind: Number(event.params.kind)});
   }
 
-  const s = await stats(context);
+  const s = (await context.ProtocolStats.get(GLOBAL)) ?? EMPTY_STATS;
   context.ProtocolStats.set({
     ...s,
     mandatesBreached: s.mandatesBreached + 1,
@@ -175,7 +167,7 @@ MandateRegistry.Breached.handler(async ({event, context}) => {
   });
 });
 
-MandateRegistry.Settled.handler(async ({event, context}) => {
+indexer.onEvent({contract: "MandateRegistry", event: "Settled"}, async ({event, context}) => {
   const mandateId = event.params.mandateId.toString();
   const mandate = await context.Mandate.get(mandateId);
 
@@ -205,7 +197,7 @@ MandateRegistry.Settled.handler(async ({event, context}) => {
     });
   }
 
-  const s = await stats(context);
+  const s = (await context.ProtocolStats.get(GLOBAL)) ?? EMPTY_STATS;
   context.ProtocolStats.set({
     ...s,
     mandatesActive: Math.max(0, s.mandatesActive - 1),
@@ -220,7 +212,7 @@ MandateRegistry.Settled.handler(async ({event, context}) => {
 //  Venue — fill history
 // ─────────────────────────────────────────────────────────────────────────────
 
-MiniPerp.PositionOpened.handler(async ({event, context}) => {
+indexer.onEvent({contract: "MiniPerp", event: "PositionOpened"}, async ({event, context}) => {
   context.Fill.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     account: event.params.account,
@@ -240,7 +232,7 @@ MiniPerp.PositionOpened.handler(async ({event, context}) => {
   });
 });
 
-MiniPerp.PositionClosed.handler(async ({event, context}) => {
+indexer.onEvent({contract: "MiniPerp", event: "PositionClosed"}, async ({event, context}) => {
   context.Fill.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     account: event.params.account,
@@ -260,9 +252,9 @@ MiniPerp.PositionClosed.handler(async ({event, context}) => {
   });
 });
 
-MiniPerp.Flattened.handler(async ({event, context}) => {
-  // A flatten is the enforcement action itself. Recorded separately from the individual
-  // closes so the demo can point at one row and say "this is the contract doing it".
+indexer.onEvent({contract: "MiniPerp", event: "Flattened"}, async ({event, context}) => {
+  // A flatten IS the enforcement action. Recorded separately from the individual closes so
+  // the demo can point at one row and say "this is the contract doing it".
   context.PoolEvent.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     kind: "flattened",
@@ -274,7 +266,7 @@ MiniPerp.Flattened.handler(async ({event, context}) => {
   });
 });
 
-MiniPerp.Liquidated.handler(async ({event, context}) => {
+indexer.onEvent({contract: "MiniPerp", event: "Liquidated"}, async ({event, context}) => {
   context.Fill.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     account: event.params.account,
@@ -298,7 +290,7 @@ MiniPerp.Liquidated.handler(async ({event, context}) => {
 //  Pool
 // ─────────────────────────────────────────────────────────────────────────────
 
-CapitalPool.Deposited.handler(async ({event, context}) => {
+indexer.onEvent({contract: "CapitalPool", event: "Deposited"}, async ({event, context}) => {
   context.PoolEvent.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     kind: "deposit",
@@ -310,7 +302,7 @@ CapitalPool.Deposited.handler(async ({event, context}) => {
   });
 });
 
-CapitalPool.WithdrawalClaimed.handler(async ({event, context}) => {
+indexer.onEvent({contract: "CapitalPool", event: "WithdrawalClaimed"}, async ({event, context}) => {
   context.PoolEvent.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     kind: "withdrawal",
@@ -322,7 +314,7 @@ CapitalPool.WithdrawalClaimed.handler(async ({event, context}) => {
   });
 });
 
-CapitalPool.Allocated.handler(async ({event, context}) => {
+indexer.onEvent({contract: "CapitalPool", event: "Allocated"}, async ({event, context}) => {
   context.PoolEvent.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     kind: "allocation",
@@ -334,7 +326,7 @@ CapitalPool.Allocated.handler(async ({event, context}) => {
   });
 });
 
-CapitalPool.MandateSettled.handler(async ({event, context}) => {
+indexer.onEvent({contract: "CapitalPool", event: "MandateSettled"}, async ({event, context}) => {
   context.PoolEvent.set({
     id: `${event.transaction.hash}-${event.logIndex}`,
     kind: "settlement",
