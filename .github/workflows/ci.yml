@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install dependencies
+        working-directory: contracts
+        run: |
+          forge install foundry-rs/forge-std --no-git
+          forge install OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-git
+
+      - name: Check formatting
+        working-directory: contracts
+        run: forge fmt --check
+        continue-on-error: true
+
+      - name: Build
+        working-directory: contracts
+        run: forge build --sizes
+
+      - name: Test
+        working-directory: contracts
+        run: forge test -vv
+
+      # The invariant suite is the part that catches the interesting bugs, so it runs
+      # harder here than locally: 1024 runs at depth 128, and 5000 fuzz runs.
+      - name: Invariants and fuzz (deep)
+        working-directory: contracts
+        run: FOUNDRY_PROFILE=ci forge test --match-path "test/invariant/*" -vv
+
+      - name: Coverage
+        working-directory: contracts
+        run: forge coverage --report summary
+
+  typescript:
+    name: Keeper and web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm install
+
+      - name: Typecheck keeper
+        run: npx tsc --noEmit -p keeper/tsconfig.json
+
+      - name: Typecheck web
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: Build web
+        working-directory: web
+        run: npx next build
+
+  integrations:
+    name: Live integration checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm install
+
+      # Verifies the Phase 1 claims against live endpoints rather than trusting a doc:
+      # Perpl is on Monad testnet, its markets are readable, and Pyth answers on-chain.
+      # If Perpl changes its API or Monad testnet moves, this is what tells us.
+      - name: Perpl and oracle spike
+        run: npx tsx scripts/spike-perpl.ts
+        continue-on-error: true
