@@ -8,6 +8,7 @@ import {MiniPerp} from "../src/venue/MiniPerp.sol";
 import {MandateAccount} from "../src/MandateAccount.sol";
 import {MandateRegistry} from "../src/MandateRegistry.sol";
 import {CapitalPool} from "../src/CapitalPool.sol";
+import {DemoIssuer} from "../src/DemoIssuer.sol";
 import {MockERC20} from "../test/utils/MockERC20.sol";
 
 /// @title Deploy
@@ -52,6 +53,7 @@ contract Deploy is Script {
         address pool;
         address deployer;
         address keeper;
+        address demoIssuer;
     }
 
     Deployed internal d;
@@ -113,6 +115,11 @@ contract Deploy is Script {
         venue.setFlattener(address(registry), true);
         registry.setIssuer(keeper, true);
 
+        // Self-serve claims, so a tester can get a mandate without messaging anybody.
+        // Testnet only — see the note on {DemoIssuer}.
+        DemoIssuer demoIssuer = new DemoIssuer(deployer, address(registry));
+        registry.setIssuer(address(demoIssuer), true);
+
         // ── seed ──────────────────────────────────────────────────────────────────
         assetToken.mint(deployer, VENUE_RESERVE + POOL_SEED);
 
@@ -133,6 +140,7 @@ contract Deploy is Script {
         console2.log("MANDATE_ACCOUNT_IMPL_ADDRESS=", address(accountImpl));
         console2.log("MANDATE_REGISTRY_ADDRESS    =", address(registry));
         console2.log("CAPITAL_POOL_ADDRESS        =", address(pool));
+        console2.log("DEMO_ISSUER_ADDRESS         =", address(demoIssuer));
         console2.log("");
         console2.log("Next: push a first price, then run `make seed`.");
 
@@ -144,7 +152,8 @@ contract Deploy is Script {
             registry: address(registry),
             pool: address(pool),
             deployer: deployer,
-            keeper: keeper
+            keeper: keeper,
+            demoIssuer: address(demoIssuer)
         });
         _writeDeploymentFile();
     }
@@ -158,7 +167,8 @@ contract Deploy is Script {
             _row("MandateAccount impl", d.accountImpl),
             _row("MiniPerp", d.venue),
             _row("PriceOracle", d.oracle),
-            _row("Asset (mUSD)", d.asset)
+            _row("Asset (mUSD)", d.asset),
+            _row("DemoIssuer", d.demoIssuer)
         );
 
         string memory env = string.concat(
@@ -168,6 +178,7 @@ contract Deploy is Script {
             "MANDATE_ACCOUNT_IMPL_ADDRESS=", vm.toString(d.accountImpl), "\n",
             "MANDATE_REGISTRY_ADDRESS=", vm.toString(d.registry), "\n",
             "CAPITAL_POOL_ADDRESS=", vm.toString(d.pool), "\n",
+            "DEMO_ISSUER_ADDRESS=", vm.toString(d.demoIssuer), "\n",
             "INDEXER_START_BLOCK=", vm.toString(block.number), "\n"
         );
 

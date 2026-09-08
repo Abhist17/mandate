@@ -18,6 +18,9 @@ interface IMandateRegistry {
 
     function isActive(uint256 mandateId) external view returns (bool);
 
+    /// @notice Issue a mandate. Permissioned — see {MandateRegistry-issue}.
+    function issue(address trader, Types.Terms calldata terms) external returns (uint256 mandateId);
+
     /// @notice Adverse move, in bps of new notional, that a pre-trade check assumes.
     /// @dev A stated, configurable parameter rather than a constant buried in the account.
     function preTradeBufferBps() external view returns (uint16);
