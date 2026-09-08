@@ -117,7 +117,14 @@ contract Fixture is Test {
             profitSplitBps: SPLIT_BPS,
             maxPositionBps: POS_BPS,
             expiry: uint64(block.timestamp) + 30 days,
-            resetHourUtc: 0
+            resetHourUtc: 0,
+            // Trailing (not until-breakeven) keeps the existing suite's expectations intact:
+            // these tests were written against a floor that follows the peak up forever.
+            drawdownMode: Types.DrawdownMode.Trailing,
+            maxConsistencyBps: 0,
+            minProfitableDays: 0,
+            payoutCushionBps: 0,
+            touchIsBreach: false
         });
     }
 

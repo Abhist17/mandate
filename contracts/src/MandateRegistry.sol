@@ -194,10 +194,14 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
             account: account,
             highWaterMark: terms.allocation,
             dayStartEquity: terms.allocation,
+            dayStartBalance: terms.allocation,
             dayStartTime: uint64(block.timestamp),
             lastMarkedEquity: terms.allocation,
             lastMarkedAt: uint64(block.timestamp),
             issuedAt: uint64(block.timestamp),
+            largestDailyGain: 0,
+            profitableDays: 0,
+            tradingDays: 0,
             status: Types.Status.Active,
             breachKind: Types.BreachKind.None
         });
@@ -280,18 +284,26 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
 
         Types.Terms memory terms = _terms[mandateId];
         uint256 markedEquity = MandateAccount(s.account).equity();
+        int256 floating = MandateAccount(s.account).floatingPnl();
 
         RiskEngine.MarkResult memory r = RiskEngine.evaluate(
             RiskEngine.MarkInput({
                 allocation: terms.allocation,
                 netPnl: int256(markedEquity) - int256(terms.allocation),
+                unrealisedPnl: floating,
                 highWaterMark: s.highWaterMark,
                 dayStartEquity: s.dayStartEquity,
+                dayStartBalance: s.dayStartBalance,
                 dayStartTime: s.dayStartTime,
+                largestDailyGain: s.largestDailyGain,
+                profitableDays: s.profitableDays,
+                tradingDays: s.tradingDays,
                 maxDrawdownBps: terms.maxDrawdownBps,
                 dailyLossBps: terms.dailyLossBps,
                 expiry: terms.expiry,
                 resetHourUtc: terms.resetHourUtc,
+                drawdownMode: terms.drawdownMode,
+                touchIsBreach: terms.touchIsBreach,
                 timestamp: uint64(block.timestamp)
             })
         );
@@ -299,8 +311,12 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         s.highWaterMark = r.highWaterMark;
         s.lastMarkedEquity = r.equity;
         s.lastMarkedAt = uint64(block.timestamp);
+        s.largestDailyGain = r.largestDailyGain;
+        s.profitableDays = r.profitableDays;
+        s.tradingDays = r.tradingDays;
         if (r.rolledDay) {
             s.dayStartEquity = r.dayStartEquity;
+            s.dayStartBalance = r.dayStartBalance;
             s.dayStartTime = r.dayStartTime;
             emit DayRolled(mandateId, r.dayStartEquity, r.dayStartTime);
         }
@@ -334,9 +350,19 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────────────
 
     /// @notice Close a mandate voluntarily and take the profit split.
+    ///
     /// @dev Open to the trader and to the registry owner. A trader closing in profit is the
     ///      happy path the whole thing is built for; a trader closing at a loss just returns
     ///      what's left.
+    ///
+    ///      Gated on {payoutEligibility}. If the mandate is in profit but fails a payout
+    ///      condition — consistency, profitable days, cushion — the close reverts and the
+    ///      mandate stays Active. That is the *soft breach* behaviour real firms use: the
+    ///      reward is withheld, the account is not killed, and the trader can keep trading
+    ///      until the condition clears.
+    ///
+    ///      The owner cannot override it. A payout condition an operator can wave through is
+    ///      a payout condition that means nothing.
     function closeMandate(uint256 mandateId) external nonReentrant {
         Types.MandateState storage s = _states[mandateId];
         if (s.status == Types.Status.None) revert Errors.UnknownMandate(mandateId);
@@ -344,7 +370,56 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         if (msg.sender != s.trader && msg.sender != owner()) {
             revert Errors.NotMandateTrader(mandateId, msg.sender);
         }
+
+        (bool payable_, Types.PayoutBlock reason) = payoutEligibility(mandateId);
+        if (!payable_) revert Errors.PayoutConditionNotMet(mandateId, uint8(reason));
+
         _terminate(mandateId, s, _terms[mandateId], Types.Status.Closed);
+    }
+
+    /// @notice Whether this mandate may take profit right now, and if not, which condition
+    ///         is blocking it.
+    ///
+    /// @dev Public and pure-ish on purpose. The whole grievance this protocol exists to
+    ///      answer is that a prop firm computes your consistency score on their server, from
+    ///      their record of your trades, and tells you the answer. Here it is a function
+    ///      anyone can call against public state and re-derive by hand.
+    ///
+    /// @return ok Whether a payout may proceed.
+    /// @return reason Which condition failed.
+    function payoutEligibility(uint256 mandateId)
+        public
+        view
+        returns (bool ok, Types.PayoutBlock reason)
+    {
+        Types.MandateState storage s = _states[mandateId];
+        Types.Terms storage t = _terms[mandateId];
+        (uint256 floor,) = floorOf(mandateId);
+        uint256 equity =
+            s.status == Types.Status.Active ? MandateAccount(s.account).equity() : s.lastMarkedEquity;
+
+        return RiskEngine.checkPayout(
+            RiskEngine.PayoutCheck({
+                equity: equity,
+                allocation: t.allocation,
+                largestDailyGain: s.largestDailyGain,
+                effectiveFloor: floor,
+                profitableDays: s.profitableDays,
+                maxConsistencyBps: t.maxConsistencyBps,
+                minProfitableDays: t.minProfitableDays,
+                payoutCushionBps: t.payoutCushionBps
+            })
+        );
+    }
+
+    /// @notice The mandate's current consistency score, in bps.
+    /// @dev `biggestWinningDay / totalProfit`. The number a prop firm computes privately.
+    function consistencyScore(uint256 mandateId) external view returns (uint256) {
+        Types.MandateState storage s = _states[mandateId];
+        Types.Terms storage t = _terms[mandateId];
+        uint256 equity =
+            s.status == Types.Status.Active ? MandateAccount(s.account).equity() : s.lastMarkedEquity;
+        return RiskEngine.consistencyBps(s.largestDailyGain, equity, t.allocation);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -420,8 +495,8 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     function floorOf(uint256 mandateId) public view returns (uint256 effectiveFloor, uint256 lastEquity) {
         Types.MandateState storage s = _states[mandateId];
         Types.Terms storage t = _terms[mandateId];
-        uint256 tf = RiskEngine.trailingFloor(s.highWaterMark, t.maxDrawdownBps);
-        uint256 df = RiskEngine.dailyFloor(s.dayStartEquity, t.dailyLossBps);
+        uint256 tf = RiskEngine.drawdownFloor(s.highWaterMark, t.allocation, t.maxDrawdownBps, t.drawdownMode);
+        uint256 df = RiskEngine.dailyFloorFromBasis(s.dayStartEquity, s.dayStartBalance, t.dailyLossBps);
         effectiveFloor = tf > df ? tf : df;
         lastEquity = s.lastMarkedEquity;
     }

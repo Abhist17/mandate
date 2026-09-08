@@ -30,6 +30,9 @@ library Errors {
     error MandateNotSettleable(uint256 mandateId);
     error NotMandateTrader(uint256 mandateId, address caller);
     error PositionStillOpen(uint256 mandateId);
+    /// @dev A payout condition (consistency, profitable days, cushion) is not satisfied.
+    ///      Soft: the mandate stays Active and the trader may keep trading.
+    error PayoutConditionNotMet(uint256 mandateId, uint8 reason);
 
     // ── pre-trade constraint checks ───────────────────────────────────────────
     /// @dev Resulting notional would exceed allocation * maxPositionBps / 10_000.

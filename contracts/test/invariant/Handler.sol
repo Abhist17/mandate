@@ -136,7 +136,12 @@ contract Handler is CommonBase, StdCheats, StdUtils {
             profitSplitBps: uint16(bound(splitSeed, 0, 10_000)),
             maxPositionBps: 30_000,
             expiry: uint64(block.timestamp) + 30 days,
-            resetHourUtc: 0
+            resetHourUtc: 0,
+            drawdownMode: Types.DrawdownMode(bound(ddSeed, 0, 2)),
+            maxConsistencyBps: uint16(bound(splitSeed, 0, 10_000)),
+            minProfitableDays: 0,
+            payoutCushionBps: 0,
+            touchIsBreach: ddSeed % 2 == 0
         });
 
         vm.prank(owner);
@@ -185,6 +190,8 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         if (id == 0) return;
         _recordExpectedPayout(id);
         vm.prank(registry.stateOf(id).trader);
+        // A close can legitimately revert on an unmet payout condition — that is the soft
+        // breach working, not a failure.
         try registry.closeMandate(id) {
             ghostSettledCount++;
         } catch {}

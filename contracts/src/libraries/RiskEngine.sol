@@ -31,22 +31,34 @@ library RiskEngine {
     struct MarkInput {
         uint256 allocation;
         int256 netPnl; // realised + unrealised, signed
+        int256 unrealisedPnl; // the floating part, used for the daily floor basis
         uint256 highWaterMark;
         uint256 dayStartEquity;
+        uint256 dayStartBalance;
         uint64 dayStartTime;
+        uint256 largestDailyGain;
+        uint32 profitableDays;
+        uint32 tradingDays;
         uint16 maxDrawdownBps;
         uint16 dailyLossBps;
         uint64 expiry;
         uint8 resetHourUtc;
+        Types.DrawdownMode drawdownMode;
+        bool touchIsBreach;
         uint64 timestamp;
     }
 
     /// @notice Everything a mark produces. The caller persists this; the library holds nothing.
     struct MarkResult {
         uint256 equity;
+        uint256 balance; // equity less floating PnL
         uint256 highWaterMark; // post-ratchet
         uint256 dayStartEquity; // post-rollover
+        uint256 dayStartBalance; // post-rollover
         uint64 dayStartTime; // post-rollover
+        uint256 largestDailyGain; // post day-close accounting
+        uint32 profitableDays;
+        uint32 tradingDays;
         uint256 trailingFloor;
         uint256 dailyFloor;
         uint256 effectiveFloor; // max(trailingFloor, dailyFloor) — the binding constraint
@@ -81,12 +93,68 @@ library RiskEngine {
         return (highWaterMark * (BPS - maxDrawdownBps)) / BPS;
     }
 
+    /// @notice The drawdown floor under a given {Types-DrawdownMode}.
+    ///
+    /// @dev The three modes are the three that exist in the real market, and the differences
+    ///      are consequential rather than cosmetic:
+    ///
+    ///      - `Static` measures from the allocation forever. Once a trader is up, this is the
+    ///        most generous: profit is theirs to give back.
+    ///      - `Trailing` measures from the peak forever. Harshest — a trader can be stopped
+    ///        out while still meaningfully in profit.
+    ///      - `TrailingUntilBreakeven` trails up but stops once the floor reaches the
+    ///        allocation. It protects the pool's principal without letting the floor chase a
+    ///        trader indefinitely, and it is what FundingPips Zero actually does. Expressed
+    ///        here as `min(trailing, allocation)`, which is exactly the "locks at the starting
+    ///        size" rule: with a 5% band the floor stops moving once the peak reaches
+    ///        allocation / 0.95.
+    ///
+    /// @param highWaterMark Peak equity observed.
+    /// @param allocation Capital originally granted.
+    /// @param maxDrawdownBps Permitted fall, in bps.
+    /// @param mode Which of the three rules applies.
+    function drawdownFloor(
+        uint256 highWaterMark,
+        uint256 allocation,
+        uint16 maxDrawdownBps,
+        Types.DrawdownMode mode
+    ) internal pure returns (uint256) {
+        if (mode == Types.DrawdownMode.Static) {
+            return (allocation * (BPS - maxDrawdownBps)) / BPS;
+        }
+        uint256 trailing = trailingFloor(highWaterMark, maxDrawdownBps);
+        if (mode == Types.DrawdownMode.TrailingUntilBreakeven && trailing > allocation) {
+            return allocation;
+        }
+        return trailing;
+    }
+
     /// @notice The daily loss floor: how far equity may fall within one loss window.
     /// @param dayStartEquity Equity when the current window opened.
     /// @param dailyLossBps Permitted fall within the window, in bps.
     /// @return The equity level at or below which the mandate is dead for the day.
     function dailyFloor(uint256 dayStartEquity, uint16 dailyLossBps) internal pure returns (uint256) {
         return (dayStartEquity * (BPS - dailyLossBps)) / BPS;
+    }
+
+    /// @notice The daily floor measured from the correct base.
+    ///
+    /// @dev Real firms measure the daily limit from "opening balance or opening equity for
+    ///      that day, **whichever is higher**", and the distinction only shows up when a
+    ///      trader carries a losing position overnight. In that case balance (realised) sits
+    ///      above equity (realised + floating), and taking the higher of the two means the
+    ///      overnight floating loss counts against today's allowance rather than being
+    ///      quietly forgiven by the rollover.
+    ///
+    ///      Getting this wrong in the trader's favour would be a real hole: hold a loser
+    ///      through the reset and your daily limit resets around it.
+    function dailyFloorFromBasis(uint256 dayStartEquity, uint256 dayStartBalance, uint16 dailyLossBps)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 basis = dayStartBalance > dayStartEquity ? dayStartBalance : dayStartEquity;
+        return (basis * (BPS - dailyLossBps)) / BPS;
     }
 
     /// @notice High-water mark ratchet. Goes up, never down.
@@ -158,14 +226,31 @@ library RiskEngine {
     /// @return r The resulting equity, floors, updated peaks and breach verdict.
     function evaluate(MarkInput memory input) internal pure returns (MarkResult memory r) {
         r.equity = equityFrom(input.allocation, input.netPnl);
+        // Balance is equity with the floating part stripped out. Needed for the daily basis.
+        r.balance = equityFrom(input.allocation, input.netPnl - input.unrealisedPnl);
+
+        r.largestDailyGain = input.largestDailyGain;
+        r.profitableDays = input.profitableDays;
+        r.tradingDays = input.tradingDays;
 
         // ── daily window rollover ────────────────────────────────────────────────
         if (isNewDay(input.dayStartTime, input.timestamp, input.resetHourUtc)) {
+            // Close out the day that just ended before opening the new one. This is what
+            // feeds the consistency rule: a day's gain is only known at its close.
+            if (r.equity > input.dayStartEquity) {
+                uint256 gain = r.equity - input.dayStartEquity;
+                if (gain > r.largestDailyGain) r.largestDailyGain = gain;
+                r.profitableDays = input.profitableDays + 1;
+            }
+            r.tradingDays = input.tradingDays + 1;
+
             r.dayStartEquity = r.equity;
+            r.dayStartBalance = r.balance;
             r.dayStartTime = input.timestamp;
             r.rolledDay = true;
         } else {
             r.dayStartEquity = input.dayStartEquity;
+            r.dayStartBalance = input.dayStartBalance;
             r.dayStartTime = input.dayStartTime;
         }
 
@@ -173,20 +258,120 @@ library RiskEngine {
         r.highWaterMark = ratchet(input.highWaterMark, r.equity);
 
         // ── floors ───────────────────────────────────────────────────────────────
-        r.trailingFloor = trailingFloor(r.highWaterMark, input.maxDrawdownBps);
-        r.dailyFloor = dailyFloor(r.dayStartEquity, input.dailyLossBps);
+        r.trailingFloor =
+            drawdownFloor(r.highWaterMark, input.allocation, input.maxDrawdownBps, input.drawdownMode);
+        r.dailyFloor = dailyFloorFromBasis(r.dayStartEquity, r.dayStartBalance, input.dailyLossBps);
         r.effectiveFloor = r.trailingFloor > r.dailyFloor ? r.trailingFloor : r.dailyFloor;
 
         // ── verdict ──────────────────────────────────────────────────────────────
+        // `touchIsBreach` selects between touching the floor being fatal (which is what real
+        // firms do — their limits are touch-sensitive) and surviving exactly at it. Both are
+        // defensible; what matters is that a mandate says which one it is, up front.
+        bool underTrailing =
+            input.touchIsBreach ? r.equity <= r.trailingFloor : r.equity < r.trailingFloor;
+        bool underDaily = input.touchIsBreach ? r.equity <= r.dailyFloor : r.equity < r.dailyFloor;
+
         if (input.timestamp >= input.expiry) {
             r.breach = Types.BreachKind.Expiry;
-        } else if (r.equity < r.trailingFloor) {
+        } else if (underTrailing) {
             r.breach = Types.BreachKind.TrailingDrawdown;
-        } else if (r.equity < r.dailyFloor) {
+        } else if (underDaily) {
             r.breach = Types.BreachKind.DailyLoss;
         } else {
             r.breach = Types.BreachKind.None;
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  Payout conditions
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// @notice The consistency score: the biggest single day as a share of total profit.
+    ///
+    /// @dev ```
+    ///      score = biggestWinningDay / totalProfit
+    ///      ```
+    ///
+    ///      **This is the rule that actually denies payouts.** A drawdown breach is
+    ///      unambiguous and rarely disputed — the number is the number. Consistency is where
+    ///      the discretion lives: it is computed on the firm's server, from the firm's record
+    ///      of your trades, against a threshold you cannot independently check. FundingPips
+    ///      Zero requires ≤15% at every reward request; 2 Step Standard's On-Demand cycle
+    ///      requires ≤35%.
+    ///
+    ///      The rule itself is not unreasonable — it stops someone passing on one lucky
+    ///      all-in and then withdrawing. The problem has never been the rule. The problem is
+    ///      that the arithmetic is private. Here it is a pure function anyone can call.
+    ///
+    ///      The score is quantised to basis points and truncates *down*, which is the
+    ///      trader-favourable direction and matches how the floors round. A consequence worth
+    ///      knowing: sub-bps dust on the best day cannot tip a passing score into a failing
+    ///      one, so the boundary is at bps granularity rather than wei granularity.
+    ///
+    /// @return bps Score in basis points. Zero when there is no profit to be inconsistent
+    ///         about, which correctly means "not blocked" rather than "divide by zero".
+    function consistencyBps(uint256 largestDailyGain, uint256 equity, uint256 allocation)
+        internal
+        pure
+        returns (uint256 bps)
+    {
+        if (equity <= allocation) return 0;
+        uint256 profit = equity - allocation;
+        if (profit == 0) return 0;
+        return (largestDailyGain * BPS) / profit;
+    }
+
+    /// @notice Inputs to a payout eligibility check.
+    struct PayoutCheck {
+        uint256 equity;
+        uint256 allocation;
+        uint256 largestDailyGain;
+        uint256 effectiveFloor;
+        uint32 profitableDays;
+        uint16 maxConsistencyBps;
+        uint16 minProfitableDays;
+        uint16 payoutCushionBps;
+    }
+
+    /// @notice Whether a mandate may take profit right now, and if not, why not.
+    ///
+    /// @dev These are **soft** conditions. They withhold a reward; they do not kill the
+    ///      mandate. That matches how real firms treat them — on FundingPips Zero a failed
+    ///      consistency score blocks the reward and the account stays open — and it is the
+    ///      right behaviour: a trader who has been inconsistent has not done anything wrong,
+    ///      they have just not yet earned the right to withdraw.
+    ///
+    ///      A mandate that is not in profit is always eligible, because there is no payout to
+    ///      block. Withholding a losing trader's zero would be theatre.
+    ///
+    /// @return ok Whether a payout may proceed.
+    /// @return reason Which condition failed. {Types-PayoutBlock-None} when `ok`.
+    function checkPayout(PayoutCheck memory c)
+        internal
+        pure
+        returns (bool ok, Types.PayoutBlock reason)
+    {
+        // No profit, no payout to withhold.
+        if (c.equity <= c.allocation) return (true, Types.PayoutBlock.None);
+
+        if (c.maxConsistencyBps != 0) {
+            uint256 score = consistencyBps(c.largestDailyGain, c.equity, c.allocation);
+            if (score > c.maxConsistencyBps) return (false, Types.PayoutBlock.Consistency);
+        }
+
+        if (c.minProfitableDays != 0 && c.profitableDays < c.minProfitableDays) {
+            return (false, Types.PayoutBlock.ProfitableDays);
+        }
+
+        if (c.payoutCushionBps != 0) {
+            // Require the account to be a stated distance clear of its floor before it can
+            // take money off the table. Paying out down to the last dollar of headroom leaves
+            // a mandate that breaches on the next tick.
+            uint256 required = c.effectiveFloor + (c.allocation * c.payoutCushionBps) / BPS;
+            if (c.equity < required) return (false, Types.PayoutBlock.Cushion);
+        }
+
+        return (true, Types.PayoutBlock.None);
     }
 
     /// @notice How much room is left before the mandate dies.
@@ -258,5 +443,12 @@ library RiskEngine {
         if (t.maxPositionBps < BPS) revert Errors.PositionCapTooLow(t.maxPositionBps);
         if (t.expiry <= nowTs) revert Errors.ExpiryInPast(t.expiry, nowTs);
         if (t.resetHourUtc > 23) revert Errors.BpsOutOfRange(t.resetHourUtc);
+        if (t.maxConsistencyBps > BPS) revert Errors.BpsOutOfRange(t.maxConsistencyBps);
+        if (t.payoutCushionBps > BPS) revert Errors.BpsOutOfRange(t.payoutCushionBps);
+        // A cushion wider than the drawdown band can never be satisfied: the account would
+        // have to sit above its own peak to pay out.
+        if (t.payoutCushionBps != 0 && t.payoutCushionBps >= t.maxDrawdownBps) {
+            revert Errors.BpsOutOfRange(t.payoutCushionBps);
+        }
     }
 }

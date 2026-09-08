@@ -37,6 +37,13 @@ contract DemoIssuer is Ownable, ReentrancyGuard {
     uint16 public maxPositionBps = 30_000; // 3x
     uint64 public duration = 7 days;
     uint8 public resetHourUtc = 0;
+    /// @dev Trailing-until-breakeven by default: the fairest of the three modes, and the one
+    ///      FundingPips Zero uses. See {Types-DrawdownMode}.
+    Types.DrawdownMode public drawdownMode = Types.DrawdownMode.TrailingUntilBreakeven;
+    uint16 public maxConsistencyBps = 3_500; // 35% — the 2-Step On-Demand threshold
+    uint16 public minProfitableDays = 0; // no minimum on a 7-day testnet mandate
+    uint16 public payoutCushionBps = 0;
+    bool public touchIsBreach = false;
 
     /// @notice Total mandates this contract may hand out. Bounds the pool capital it can
     ///         commit even if the issuer role is left on and forgotten.
@@ -85,7 +92,12 @@ contract DemoIssuer is Ownable, ReentrancyGuard {
                 profitSplitBps: profitSplitBps,
                 maxPositionBps: maxPositionBps,
                 expiry: uint64(block.timestamp) + duration,
-                resetHourUtc: resetHourUtc
+                resetHourUtc: resetHourUtc,
+                drawdownMode: drawdownMode,
+                maxConsistencyBps: maxConsistencyBps,
+                minProfitableDays: minProfitableDays,
+                payoutCushionBps: payoutCushionBps,
+                touchIsBreach: touchIsBreach
             })
         );
 

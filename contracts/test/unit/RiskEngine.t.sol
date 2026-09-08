@@ -27,13 +27,20 @@ contract RiskEngineTest is Test {
         return RiskEngine.MarkInput({
             allocation: ALLOC,
             netPnl: netPnl,
+            unrealisedPnl: 0,
             highWaterMark: hwm,
             dayStartEquity: dayStart,
+            dayStartBalance: dayStart,
             dayStartTime: T0,
+            largestDailyGain: 0,
+            profitableDays: 0,
+            tradingDays: 0,
             maxDrawdownBps: DD_BPS,
             dailyLossBps: DAILY_BPS,
             expiry: T0 + 30 days,
             resetHourUtc: 0,
+            drawdownMode: Types.DrawdownMode.Trailing,
+            touchIsBreach: false,
             timestamp: ts
         });
     }
@@ -292,7 +299,12 @@ contract RiskEngineTest is Test {
             profitSplitBps: SPLIT_BPS,
             maxPositionBps: POS_BPS,
             expiry: T0 + 30 days,
-            resetHourUtc: 0
+            resetHourUtc: 0,
+            drawdownMode: Types.DrawdownMode.Trailing,
+            maxConsistencyBps: 0,
+            minProfitableDays: 0,
+            payoutCushionBps: 0,
+            touchIsBreach: false
         });
     }
 
@@ -375,13 +387,20 @@ contract RiskEngineTest is Test {
         RiskEngine.MarkInput memory input = RiskEngine.MarkInput({
             allocation: ALLOC,
             netPnl: netPnl,
+            unrealisedPnl: 0,
             highWaterMark: hwm,
             dayStartEquity: ALLOC,
+            dayStartBalance: ALLOC,
             dayStartTime: T0,
+            largestDailyGain: 0,
+            profitableDays: 0,
+            tradingDays: 0,
             maxDrawdownBps: ddBps,
             dailyLossBps: dailyBps,
             expiry: T0 + 30 days,
             resetHourUtc: 0,
+            drawdownMode: Types.DrawdownMode.Trailing,
+            touchIsBreach: false,
             timestamp: T0 + 1 hours
         });
 

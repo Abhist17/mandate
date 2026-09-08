@@ -194,6 +194,14 @@ contract MandateAccount is ReentrancyGuard {
         return int256(equity()) - int256(allocation);
     }
 
+    /// @notice Unrealised PnL on open positions, net of accrued funding.
+    /// @dev Separated from realised so the daily floor can be measured from
+    ///      `max(dayStartBalance, dayStartEquity)`, which is what real firms use. See
+    ///      {RiskEngine-dailyFloorFromBasis} for why the distinction matters.
+    function floatingPnl() external view returns (int256) {
+        return venue.unrealisedPnl(address(this));
+    }
+
     /// @notice Open notional across every market.
     function notional() external view returns (uint256) {
         return venue.totalNotional(address(this));

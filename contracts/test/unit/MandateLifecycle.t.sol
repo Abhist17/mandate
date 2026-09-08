@@ -474,4 +474,179 @@ contract MandateLifecycleTest is Fixture {
         _forcePrice(BTC, 8_000);
         assertEq(_priceOf(BTC), 8_000 * PRICE);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  Payout conditions, end to end
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// @dev The soft breach, wired to the money. A trader whose profit came from one lucky
+    ///      day cannot withdraw — but the mandate stays Active and they can keep trading
+    ///      until the score improves. This is the behaviour a real firm implements on a
+    ///      private server; here the trader can read the arithmetic before they try.
+    function test_payout_consistencyRuleBlocksTheCloseButNotTheMandate() public {
+        Types.Terms memory terms = _defaultTerms();
+        terms.maxConsistencyBps = 1_500; // FundingPips Zero's 15%
+        terms.dailyLossBps = DD_BPS; // let the trailing floor bind, so a big day is possible
+        (uint256 id, MandateAccount account) = _issue(trader, terms);
+
+        // One large winning day: open, rally, roll the day so the gain is booked.
+        vm.prank(trader);
+        account.openPosition(BTC, true, 3e18, 0);
+        _setPrice(BTC, 84_000);
+        registry.markAndEnforce(id);
+        _skip(1 days);
+        registry.markAndEnforce(id);
+
+        assertGt(registry.stateOf(id).largestDailyGain, 0, "a winning day was recorded");
+        assertGt(registry.consistencyScore(id), 1_500, "essentially all profit from one day");
+
+        (bool ok, Types.PayoutBlock reason) = registry.payoutEligibility(id);
+        assertFalse(ok);
+        assertEq(uint8(reason), uint8(Types.PayoutBlock.Consistency));
+
+        vm.prank(trader);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.PayoutConditionNotMet.selector, id, uint8(Types.PayoutBlock.Consistency)
+            )
+        );
+        registry.closeMandate(id);
+
+        // Soft: still trading, not breached.
+        assertEq(uint8(registry.stateOf(id).status), uint8(Types.Status.Active), "mandate survives");
+    }
+
+    /// @dev The operator cannot wave it through. A payout condition an owner can override is
+    ///      a payout condition that means nothing.
+    function test_payout_ownerCannotOverrideAConsistencyBlock() public {
+        Types.Terms memory terms = _defaultTerms();
+        terms.maxConsistencyBps = 1_500;
+        terms.dailyLossBps = DD_BPS;
+        (uint256 id, MandateAccount account) = _issue(trader, terms);
+
+        vm.prank(trader);
+        account.openPosition(BTC, true, 3e18, 0);
+        _setPrice(BTC, 84_000);
+        registry.markAndEnforce(id);
+        _skip(1 days);
+        registry.markAndEnforce(id);
+
+        vm.prank(owner);
+        vm.expectRevert();
+        registry.closeMandate(id);
+    }
+
+    /// @dev A losing mandate is always closeable: there is no payout to withhold, and holding
+    ///      a trader hostage over a rule about profit they do not have would be absurd.
+    function test_payout_losingMandateIsAlwaysCloseable() public {
+        Types.Terms memory terms = _defaultTerms();
+        terms.maxConsistencyBps = 1_500;
+        (uint256 id, MandateAccount account) = _issue(trader, terms);
+
+        vm.prank(trader);
+        account.openPosition(BTC, true, 2e18, 0);
+        _setPrice(BTC, 78_000);
+        registry.markAndEnforce(id);
+
+        vm.prank(trader);
+        registry.closeMandate(id);
+        assertEq(uint8(registry.stateOf(id).status), uint8(Types.Status.Closed));
+    }
+
+    /// @dev A breach settles regardless of payout conditions. The conditions gate *taking
+    ///      profit*, not being enforced out — a trader cannot dodge a drawdown breach by
+    ///      being inconsistent.
+    function test_payout_conditionsDoNotBlockBreachSettlement() public {
+        Types.Terms memory terms = _defaultTerms();
+        terms.maxConsistencyBps = 1; // impossible to satisfy
+        (uint256 id, MandateAccount account) = _issue(trader, terms);
+
+        vm.prank(trader);
+        account.openPosition(BTC, true, 2e18, 0);
+        _setPrice(BTC, 75_000);
+
+        vm.prank(stranger);
+        registry.markAndEnforce(id);
+        assertEq(uint8(registry.stateOf(id).status), uint8(Types.Status.Breached), "enforced anyway");
+    }
+
+    /// @dev Two comparable winning days, so no single day dominates the profit. Contrast with
+    ///      the one-lucky-day case above: same total profit shape, opposite verdict, and the
+    ///      difference is exactly what the consistency rule is for.
+    function test_payout_eligibleWhenProfitIsSpreadAcrossDays() public {
+        Types.Terms memory terms = _defaultTerms();
+        terms.maxConsistencyBps = 9_000; // generous threshold
+        terms.dailyLossBps = DD_BPS;
+        (uint256 id, MandateAccount account) = _issue(trader, terms);
+
+        vm.prank(trader);
+        account.openPosition(BTC, true, 2e18, 0);
+
+        // Day one: a modest gain, booked by the rollover.
+        _setPrice(BTC, 81_000);
+        registry.markAndEnforce(id);
+        _skip(1 days);
+        registry.markAndEnforce(id);
+
+        // Day two: a comparable gain, so neither day dominates.
+        _setPrice(BTC, 82_000);
+        registry.markAndEnforce(id);
+        _skip(1 days);
+        registry.markAndEnforce(id);
+
+        assertEq(registry.stateOf(id).profitableDays, 2, "two winning days on record");
+        assertLt(registry.consistencyScore(id), 9_000, "no single day dominates");
+
+        (bool ok,) = registry.payoutEligibility(id);
+        assertTrue(ok, "inside a 90% threshold");
+
+        vm.prank(trader);
+        registry.closeMandate(id);
+        assertGt(asset.balanceOf(trader), 0, "and the trader was actually paid");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  Drawdown modes, end to end
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// @dev Under a static floor a trader who is up can give the profit back without dying.
+    ///      Under a trailing floor the same path is a breach. Same trades, different terms.
+    function test_drawdownMode_staticSurvivesWhatTrailingKills() public {
+        Types.Terms memory staticTerms = _defaultTerms();
+        staticTerms.drawdownMode = Types.DrawdownMode.Static;
+        staticTerms.dailyLossBps = DD_BPS;
+        (uint256 staticId, MandateAccount staticAcct) = _issue(trader, staticTerms);
+
+        Types.Terms memory trailingTerms = _defaultTerms();
+        trailingTerms.drawdownMode = Types.DrawdownMode.Trailing;
+        trailingTerms.dailyLossBps = DD_BPS;
+        address t2 = makeAddr("trailingTrader");
+        (uint256 trailId, MandateAccount trailAcct) = _issue(t2, trailingTerms);
+
+        vm.prank(trader);
+        staticAcct.openPosition(BTC, true, 3e18, 0);
+        vm.prank(t2);
+        trailAcct.openPosition(BTC, true, 3e18, 0);
+
+        // Rally, so the trailing floor ratchets above the allocation.
+        _setPrice(BTC, 90_000);
+        registry.markAndEnforce(staticId);
+        registry.markAndEnforce(trailId);
+
+        // Give it all back to just above the original allocation.
+        _setPrice(BTC, 80_400);
+        registry.markAndEnforce(staticId);
+        registry.markAndEnforce(trailId);
+
+        assertEq(
+            uint8(registry.stateOf(staticId).status),
+            uint8(Types.Status.Active),
+            "static floor never moved, so giving profit back is survivable"
+        );
+        assertEq(
+            uint8(registry.stateOf(trailId).status),
+            uint8(Types.Status.Breached),
+            "trailing floor followed the peak up and caught them on the way down"
+        );
+    }
 }
