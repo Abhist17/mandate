@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="Mandate — the rules are the contract">
+  <!--
+    The mark is the product: an equity line held above a hard floor.
+    Green line = a trader's equity. Red line = the drawdown floor. The filled band between
+    them is the headroom, which is the only number that matters on the trader's screen.
+    The line ends by crossing the floor, because that is the moment the contract acts.
+  -->
+  <defs>
+    <linearGradient id="headroom" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2ee6a8" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#2ee6a8" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="breach" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2ee6a8"/>
+      <stop offset="82%" stop-color="#2ee6a8"/>
+      <stop offset="93%" stop-color="#ff4d5e"/>
+      <stop offset="100%" stop-color="#ff4d5e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#08090b"/>
+
+  <!-- grid -->
+  <g stroke="#1d222c" stroke-width="1">
+    <line x1="120" y1="180" x2="1080" y2="180"/>
+    <line x1="120" y1="270" x2="1080" y2="270"/>
+    <line x1="120" y1="360" x2="1080" y2="360"/>
+  </g>
+
+  <!-- headroom band: equity down to the floor -->
+  <path fill="url(#headroom)"
+        d="M120,300 L240,300 L240,258 L360,258 L360,222 L480,222 L480,270 L600,270
+           L600,234 L720,234 L720,300 L840,300 L840,342 L960,342 L960,396 L1010,396
+           L1010,420 L120,420 Z"/>
+
+  <!-- the drawdown floor: a hard line, never a gradient -->
+  <line x1="120" y1="420" x2="1080" y2="420" stroke="#ff4d5e" stroke-width="5"/>
+
+  <!-- equity, stepped like a per-block mark, crossing the floor at the end -->
+  <path fill="none" stroke="url(#breach)" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"
+        d="M120,300 L240,300 L240,258 L360,258 L360,222 L480,222 L480,270 L600,270
+           L600,234 L720,234 L720,300 L840,300 L840,342 L960,342 L960,396 L1010,396 L1010,468"/>
+
+  <!-- the breach -->
+  <circle cx="1010" cy="420" r="11" fill="#ff4d5e"/>
+  <circle cx="1010" cy="420" r="22" fill="none" stroke="#ff4d5e" stroke-width="2.5" opacity="0.45"/>
+
+  <text x="120" y="132" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="82" font-weight="700" letter-spacing="10" fill="#e8eaef">MANDATE</text>
+  <text x="126" y="176" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="25" letter-spacing="3.5" fill="#5f6879">THE RULES ARE THE CONTRACT</text>
+
+  <!-- Label sits far left so it never collides with the breach marker on the right. -->
+  <text x="120" y="454"
+        font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="21" letter-spacing="1.5" fill="#ff4d5e">DRAWDOWN FLOOR</text>
+  <text x="1080" y="492" text-anchor="end"
+        font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="19" letter-spacing="1.5" fill="#5f6879">BREACH · FLATTENED SAME BLOCK</text>
+
+  <text x="120" y="556" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="23" letter-spacing="1.5" fill="#5f6879">
+    Onchain prop firm on Monad · enforcement is a public function
+  </text>
+</svg>

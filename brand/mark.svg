@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Mandate">
+  <!-- The mark alone: equity held above a floor, then crossing it. -->
+  <defs>
+    <linearGradient id="h" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2ee6a8" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#2ee6a8" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2ee6a8"/><stop offset="80%" stop-color="#2ee6a8"/>
+      <stop offset="92%" stop-color="#ff4d5e"/><stop offset="100%" stop-color="#ff4d5e"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#08090b"/>
+  <path fill="url(#h)" d="M88,268 L156,268 L156,214 L224,214 L224,176 L292,176 L292,232 L360,232 L360,300 L410,300 L410,356 L88,356 Z"/>
+  <line x1="88" y1="356" x2="424" y2="356" stroke="#ff4d5e" stroke-width="14" stroke-linecap="round"/>
+  <path fill="none" stroke="url(#b)" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"
+        d="M88,268 L156,268 L156,214 L224,214 L224,176 L292,176 L292,232 L360,232 L360,300 L410,300 L410,410"/>
+  <circle cx="410" cy="356" r="20" fill="#ff4d5e"/>
+</svg>

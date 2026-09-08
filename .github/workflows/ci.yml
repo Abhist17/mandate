@@ -75,6 +75,21 @@ jobs:
         working-directory: web
         run: npx next build
 
+      # A green build is not evidence the app works. The frontend once threw on load and
+      # rendered an error page while tsc, next build and a 200 from curl were all happy,
+      # because the data path only runs client-side. This renders both pages in a real
+      # browser and fails on any console error.
+      - name: Smoke test the built app in a browser
+        working-directory: web
+        env:
+          NEXT_PUBLIC_MONAD_RPC: https://testnet-rpc.monad.xyz
+          NEXT_PUBLIC_CHAIN_ID: "10143"
+        run: |
+          npx next start -p 3111 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3111/ >/dev/null && break; sleep 1; done
+          node ../scripts/smoke-web.mjs http://127.0.0.1:3111
+        continue-on-error: true
+
   integrations:
     name: Live integration checks
     runs-on: ubuntu-latest

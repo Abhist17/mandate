@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="brand/logo.png" alt="Mandate — the rules are the contract" width="720">
+
 # Mandate
 
 ### The rules are the contract.
@@ -183,7 +185,7 @@ See [SPEC.md](SPEC.md) for the build specification.
 - [x] Phase 0 — Scaffold
 - [x] Phase 1 — Venue gate resolved ([findings](docs/PHASE1-FINDINGS.md))
 - [x] Phase 2 — Core contracts
-- [x] Phase 3 — 193 tests, 10 invariants, fuzz
+- [x] Phase 3 — 227 tests, 10 invariants, fuzz
 - [x] Phase 4 — Keeper
 - [x] Phase 5 — Trader + LP frontend
 - [x] Phase 6 — Envio indexer
@@ -191,7 +193,7 @@ See [SPEC.md](SPEC.md) for the build specification.
 - [x] Phase 8 — Live breach demo
 
 ```
-forge test    193 passed, 0 failed
+forge test    227 passed, 0 failed
 coverage      RiskEngine 100% · MandateRegistry 100% · DemoIssuer 100%
               95.52% lines across contracts/src (the deploy script is excluded —
               coverage of a deploy script measures nothing)
@@ -227,9 +229,14 @@ interval) and marks against Perpl's own oracle. Full reasoning in
 ## Testing
 
 ```bash
-make test        # 193 tests
-make coverage    # RiskEngine 100%, MandateRegistry 100%, 95.52% across src/
+make test        # 227 tests
+make coverage    # RiskEngine 99%, MandateRegistry 100%, 95%+ across src/
+make smoke       # renders both pages in a real browser, fails on any console error
 ```
+
+`make smoke` exists because of a specific miss: the frontend once threw on load and rendered
+nothing, while `tsc`, `next build` and a 200 from `curl` were all green — the data path only
+runs client-side. A passing build is not evidence a page works.
 
 The boundary cases are the point. A drawdown rule that fires one wei early confiscates an
 account for nothing; one that fires late is a rule the pool cannot rely on. So the floor

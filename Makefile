@@ -65,6 +65,9 @@ demo: ## The money shot: healthy mandate -> adverse move -> breach -> flatten
 spike: ## Re-verify the Phase 1 claims against live Perpl and Pyth endpoints
 	npx tsx scripts/spike-perpl.ts
 
+smoke: ## Render the app in a real browser and fail on any console error
+	node scripts/smoke-web.mjs
+
 verify: build test typecheck web-build ## Everything CI runs, locally
 	@echo "\033[32mAll checks passed.\033[0m"
 
