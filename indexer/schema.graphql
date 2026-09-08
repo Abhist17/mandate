@@ -1,0 +1,138 @@
+# Mandate — indexed schema
+#
+# Shaped around the two questions the app asks:
+#   1. "draw this mandate's equity against its floor over time"  -> EquityMark
+#   2. "what has this pool done, and to whom"                    -> Mandate, Settlement
+#
+# Amounts are BigInt in the asset's own units (6 decimals). Formatting is the frontend's job;
+# storing pre-divided floats here would quietly lose the precision the floor comparison needs.
+
+type Mandate {
+  id: ID! # mandateId as a string
+  mandateId: BigInt!
+  trader: String!
+  account: String!
+
+  allocation: BigInt!
+  maxDrawdownBps: Int!
+  dailyLossBps: Int!
+  profitSplitBps: Int!
+  maxPositionBps: Int!
+  expiry: BigInt!
+
+  issuedAt: BigInt!
+  issuedTx: String!
+
+  "0 None, 1 Active, 2 Breached, 3 Expired, 4 Closed"
+  status: Int!
+  "0 None, 1 TrailingDrawdown, 2 DailyLoss, 3 Expiry"
+  breachKind: Int!
+
+  currentEquity: BigInt!
+  highWaterMark: BigInt!
+  currentFloor: BigInt!
+  markCount: Int!
+  lastMarkedAt: BigInt!
+
+  finalEquity: BigInt
+  traderPayout: BigInt
+  poolReturn: BigInt
+  settledAt: BigInt
+  settledTx: String
+
+  marks: [EquityMark!]! @derivedFrom(field: "mandate")
+}
+
+"One mark. This is the equity curve — every point on the trader screen is a row here."
+type EquityMark {
+  id: ID! # txHash-logIndex
+  mandate: Mandate!
+  mandateId: BigInt!
+
+  equity: BigInt!
+  highWaterMark: BigInt!
+  trailingFloor: BigInt!
+  dailyFloor: BigInt!
+  "max(trailingFloor, dailyFloor) — the constraint that actually binds"
+  effectiveFloor: BigInt!
+  "equity - effectiveFloor, floored at zero. The number on the trader's screen."
+  headroom: BigInt!
+  netPnl: BigInt!
+
+  markedAt: BigInt!
+  blockNumber: BigInt!
+  txHash: String!
+  "Who called markAndEnforce. Anyone can — that is the point."
+  markedBy: String!
+}
+
+type Breach {
+  id: ID!
+  mandateId: BigInt!
+  trader: String!
+  kind: Int!
+  equityAtBreach: BigInt!
+  floor: BigInt!
+  "The address that enforced it. Evidence that enforcement is not ours to withhold."
+  enforcedBy: String!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: String!
+}
+
+type Settlement {
+  id: ID!
+  mandateId: BigInt!
+  trader: String!
+  finalStatus: Int!
+  finalEquity: BigInt!
+  traderPayout: BigInt!
+  poolReturn: BigInt!
+  allocation: BigInt!
+  poolPnl: BigInt!
+  timestamp: BigInt!
+  txHash: String!
+}
+
+"Fill history for a mandate account."
+type Fill {
+  id: ID!
+  account: String!
+  marketId: Int!
+  kind: String! # "open" | "close" | "liquidation"
+  isLong: Boolean
+  size: BigInt!
+  price: BigInt!
+  notional: BigInt
+  margin: BigInt
+  fee: BigInt
+  realisedPnl: BigInt
+  funding: BigInt
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  txHash: String!
+}
+
+"Running protocol totals, for the LP dashboard and the pitch's benchmark numbers."
+type ProtocolStats {
+  id: ID! # always "global"
+  mandatesIssued: Int!
+  mandatesActive: Int!
+  mandatesBreached: Int!
+  mandatesSettled: Int!
+  totalMarks: Int!
+  totalAllocated: BigInt!
+  totalTraderPayouts: BigInt!
+  totalPoolReturns: BigInt!
+  lastUpdated: BigInt!
+}
+
+type PoolEvent {
+  id: ID!
+  kind: String! # "deposit" | "withdrawal" | "allocation" | "settlement"
+  lp: String
+  assets: BigInt!
+  shares: BigInt
+  timestamp: BigInt!
+  txHash: String!
+}

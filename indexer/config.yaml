@@ -1,0 +1,46 @@
+# Envio HyperIndex — Mandate
+#
+# Indexes the enforcement loop on Monad testnet. This is not a decorative integration:
+# Monad's public RPC caps eth_getLogs at a 100-block range (~40 seconds at 400ms blocks),
+# so the trader screen's equity curve is not buildable from raw RPC. The chart in web/ reads
+# from the GraphQL endpoint this produces and falls back to a degraded recent-only window
+# when it is absent.
+#
+# Run:  cd indexer && npx envio dev
+name: mandate
+description: Onchain prop firm — mandates, equity marks, breaches and settlement on Monad
+
+networks:
+  - id: 10143 # Monad testnet, verified in docs/PHASE1-FINDINGS.md
+    start_block: 0
+    contracts:
+      - name: MandateRegistry
+        address:
+          - "0x0000000000000000000000000000000000000000" # replaced by `npm run sync` from .env
+        handler: src/EventHandlers.ts
+        events:
+          - event: MandateIssued(uint256 indexed mandateId, address indexed trader, address indexed account, uint256 allocation, uint16 maxDrawdownBps, uint16 dailyLossBps, uint16 profitSplitBps, uint16 maxPositionBps, uint64 expiry)
+          - event: EquityMarked(uint256 indexed mandateId, uint256 equity, uint256 highWaterMark, uint256 trailingFloor, uint256 dailyFloor, int256 netPnl, uint64 markedAt, address indexed by)
+          - event: DayRolled(uint256 indexed mandateId, uint256 dayStartEquity, uint64 dayStartTime)
+          - event: Breached(uint256 indexed mandateId, uint8 kind, uint256 equityAtBreach, uint256 floor, address indexed enforcedBy)
+          - event: Settled(uint256 indexed mandateId, uint8 finalStatus, uint256 finalEquity, uint256 traderPayout, uint256 poolReturn)
+
+      - name: MiniPerp
+        address:
+          - "0x0000000000000000000000000000000000000000"
+        handler: src/EventHandlers.ts
+        events:
+          - event: PositionOpened(address indexed account, uint16 indexed marketId, bool isLong, uint256 size, uint256 fillPrice, uint256 notional, uint256 margin, uint256 fee)
+          - event: PositionClosed(address indexed account, uint16 indexed marketId, uint256 size, uint256 fillPrice, int256 realisedPnl, uint256 fee, int256 funding)
+          - event: Flattened(address indexed account, address indexed by, int256 realisedPnl, uint256 positionsClosed)
+          - event: Liquidated(address indexed account, uint16 indexed marketId, address indexed by, int256 realisedPnl)
+
+      - name: CapitalPool
+        address:
+          - "0x0000000000000000000000000000000000000000"
+        handler: src/EventHandlers.ts
+        events:
+          - event: Deposited(address indexed lp, uint256 assets, uint256 shares)
+          - event: WithdrawalClaimed(address indexed lp, uint256 shares, uint256 assets)
+          - event: Allocated(address indexed account, uint256 amount, uint256 totalAllocated)
+          - event: MandateSettled(uint256 indexed mandateId, uint256 allocation, uint256 poolReturn, int256 poolPnl)
