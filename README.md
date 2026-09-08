@@ -23,24 +23,76 @@ cap, profit split. Every one of those rules lives in a PDF, and every one is enf
 private server you have to trust. When the risk engine says you breached, you breached.
 When the payout desk says no, it's no.
 
-I trade a funded account. I blew two before this one. The rules were a PDF, the risk
-engine was a black box, and the payout was somebody's decision.
+I trade a funded account. I blew two before this one. The rules were a PDF, the risk engine
+was a black box, and the payout was somebody's decision.
+
+And here is the part most people miss: **the drawdown is almost never what they deny you on.**
+That number is unambiguous — you can see it on your own platform. They deny you on the
+**consistency rule**: *your biggest winning day was more than 15% of your total profit.* That
+number is computed on their server, from their record of your trades, against a threshold you
+cannot independently check. The rule itself is reasonable. Its privacy is not.
+
+## We are not first, and the difference matters
+
+Onchain prop firms already exist. [Propr.xyz](https://propr.xyz) (XBorg, backed by SwissBorg),
+Hypernova, Vanta Trading (Taoshi + Hyperliquid), GT Funded and others all launched in 2026.
+Anyone claiming to have invented this category has not looked.
+
+What they put onchain is narrower than the marketing suggests:
+
+| | Rule definitions | Payout settlement | **Breach detection & enforcement** |
+|---|---|---|---|
+| Existing onchain prop firms | ✅ onchain, immutable | ✅ onchain, USDC | ❌ private server |
+| **Mandate** | ✅ | ✅ | ✅ **onchain, permissionless** |
+
+DeFiPrime's survey of the category puts it exactly right:
+
+> "Disclosing the engine in plain language is a real step past MyForexFunds, but
+> **'trust our classifier' is not the same as 'verify.'**"
+
+So the claim is specific and checkable: the category has made the *rules* and the *payout*
+onchain. The **risk engine that decides whether you breached** is still somebody's server.
+Mandate puts the enforcement loop itself onchain, and lets anyone run it.
+
+That is also the honest answer to "why Monad." An enforcement loop has to mark every open
+account every block, and that is only affordable at 400ms blocks and sub-cent gas. It is not
+that Monad is faster — it is that **the enforcement layer is the part nobody has built, and
+this is the first chain where building it is economically possible.**
 
 ## What Mandate does
 
 A **mandate** is an allocation of pooled capital plus enforceable constraints on how it's
 used, legible to both sides before either commits:
 
+**Risk terms** — checked pre-trade, and again on every block:
+
 | Term | Meaning |
 |---|---|
 | `allocation` | Capital granted to the trader |
-| `maxDrawdownBps` | Trailing drawdown from the equity high-water mark |
-| `dailyLossBps` | Loss limit from day-start equity, reset at a configurable hour |
+| `maxDrawdownBps` + `drawdownMode` | Static, trailing, or trailing-until-breakeven — all three real models |
+| `dailyLossBps` | Loss limit, measured from `max(day-start balance, day-start equity)` |
 | `maxPositionBps` | Notional cap as a multiple of allocation |
-| `profitSplitBps` | Trader's share of profit at settlement |
 | `expiry` | Mandate deadline |
+| `touchIsBreach` | Whether touching the floor breaches, as real firms do |
 
-Every one of those is checked onchain — pre-trade, and again on every block mark.
+**Payout terms** — checked when the trader tries to take profit:
+
+| Term | Meaning |
+|---|---|
+| `maxConsistencyBps` | Biggest winning day as a share of total profit |
+| `minProfitableDays` | Profitable days required before a withdrawal |
+| `payoutCushionBps` | Headroom above the floor required to pay out |
+| `profitSplitBps` | Trader's share of profit at settlement |
+
+The second table is the one that makes this different. Anyone can call
+`registry.consistencyScore(id)` and get the exact number a prop firm would compute for you in
+private — and `payoutEligibility(id)` tells you which condition is blocking you, if any. The
+registry owner cannot override it. A payout condition an operator can wave through is a payout
+condition that means nothing.
+
+Payout conditions are **soft**: a failed condition withholds the reward and leaves the mandate
+open, so the trader keeps trading until it clears. That is how real firms treat them, and it
+is the right behaviour — being inconsistent is not misconduct.
 
 ## Why this needs Monad
 
@@ -231,6 +283,18 @@ not that enforcement is novel; it is that *verifiable* enforcement just became a
 **"Isn't this just a vault with extra steps?"**
 A vault allocates capital. A mandate allocates capital *plus enforceable constraints on how it
 is used*, legible to both sides before either commits. That is the primitive.
+
+**"Propr and Hypernova already exist. What's left?"**
+The enforcement layer. They publish immutable rule definitions and settle payouts onchain,
+both real improvements on MyForexFunds. Neither documents onchain breach detection, and
+neither lets a third party enforce. Ours is one public function with no access modifier —
+`markAndEnforce`. [DEPLOY.md](DEPLOY.md) has the command to run it yourself against a live
+mandate from any key you like.
+
+**"Why should I believe you can enforce the consistency rule fairly?"**
+You shouldn't have to believe it. `consistencyScore(id)` is a view function over public state.
+Read the number, re-derive it by hand from the `EquityMarked` events, and check ours matches.
+That is the entire difference between this and a support ticket.
 
 ## License
 
