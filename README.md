@@ -82,6 +82,18 @@ LP deposits ──► CapitalPool ──► allocates ──► MandateAccount (
 | Indexer | `indexer/` | Envio HyperIndex — equity curves, fill history |
 | Frontend | `web/` | Trader view (equity curve + floor), LP view |
 
+## Try it (testnet, free, no signup)
+
+1. Open the app and connect a wallet on Monad testnet
+2. Click **Claim a mandate** — you get $100k of testnet capital under enforced terms
+3. Trade it. Watch the distance-to-floor readout move against you
+4. Breach the 10% trailing drawdown or the 5% daily limit and the contract flattens your
+   position and takes the mandate back, in the same block
+
+Nobody approves the claim and nobody can refuse the payout. That is the whole idea, and
+breaking it is the interesting part — [`DemoIssuer.sol`](contracts/src/DemoIssuer.sol) hands
+out one mandate per address on fixed, published terms.
+
 ## Quickstart
 
 ```bash
@@ -119,7 +131,7 @@ See [SPEC.md](SPEC.md) for the build specification.
 - [x] Phase 0 — Scaffold
 - [x] Phase 1 — Venue gate resolved ([findings](docs/PHASE1-FINDINGS.md))
 - [x] Phase 2 — Core contracts
-- [x] Phase 3 — 178 tests, 10 invariants, fuzz
+- [x] Phase 3 — 193 tests, 10 invariants, fuzz
 - [x] Phase 4 — Keeper
 - [x] Phase 5 — Trader + LP frontend
 - [x] Phase 6 — Envio indexer
@@ -127,8 +139,10 @@ See [SPEC.md](SPEC.md) for the build specification.
 - [x] Phase 8 — Live breach demo
 
 ```
-forge test    178 passed, 0 failed
-coverage      RiskEngine 100% · MandateRegistry 100% · total 92.75% lines
+forge test    193 passed, 0 failed
+coverage      RiskEngine 100% · MandateRegistry 100% · DemoIssuer 100%
+              95.52% lines across contracts/src (the deploy script is excluded —
+              coverage of a deploy script measures nothing)
 ```
 
 ## Sponsor integrations
@@ -161,8 +175,8 @@ interval) and marks against Perpl's own oracle. Full reasoning in
 ## Testing
 
 ```bash
-make test        # 178 tests
-make coverage    # RiskEngine 100% lines, MandateRegistry 100% lines
+make test        # 193 tests
+make coverage    # RiskEngine 100%, MandateRegistry 100%, 95.52% across src/
 ```
 
 The boundary cases are the point. A drawdown rule that fires one wei early confiscates an

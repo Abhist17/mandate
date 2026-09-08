@@ -67,8 +67,8 @@ during Phase 1 and are recorded in [`docs/PHASE1-FINDINGS.md`](docs/PHASE1-FINDI
 ## 2. Test before deploying
 
 ```bash
-make test        # 178 tests
-make coverage    # RiskEngine 100%, MandateRegistry 100% lines
+make test        # 193 tests
+make coverage    # RiskEngine 100%, MandateRegistry 100%, 95.52% across src/
 ```
 
 ## 3. Deploy
@@ -131,7 +131,35 @@ cast send $MANDATE_REGISTRY_ADDRESS "markAndEnforce(uint256)" 1 \
 
 Any address works. That is the point of the design.
 
-## 5. Seed
+## 5. Open claims to testers
+
+`DemoIssuer` is deployed and granted the issuer role automatically, so anyone can claim one
+mandate per address on fixed terms — no approval step, no queue, no DM. This is the whole
+tester funnel; without it every allocation goes through you.
+
+```bash
+# Adjust the terms testers get
+cast send $DEMO_ISSUER_ADDRESS "setTerms(uint256,uint16,uint16,uint16,uint16,uint64,uint8)" \
+  100000000000 1000 500 8000 30000 604800 0 \
+  --private-key $PRIVATE_KEY --rpc-url $MONAD_TESTNET_RPC --legacy
+
+# Cap total exposure
+cast send $DEMO_ISSUER_ADDRESS "setMaxClaims(uint256)" 100 \
+  --private-key $PRIVATE_KEY --rpc-url $MONAD_TESTNET_RPC --legacy
+
+# Let a tester who breached have another go
+cast send $DEMO_ISSUER_ADDRESS "resetClaim(address)" <TESTER> \
+  --private-key $PRIVATE_KEY --rpc-url $MONAD_TESTNET_RPC --legacy
+
+# Kill switch — stops all claims, touches nothing already issued
+cast send $MANDATE_REGISTRY_ADDRESS "setIssuer(address,bool)" $DEMO_ISSUER_ADDRESS false \
+  --private-key $PRIVATE_KEY --rpc-url $MONAD_TESTNET_RPC --legacy
+```
+
+Make sure the pool has capital: each claim allocates from it, and allocations are capped at
+20% of pool assets each.
+
+## 6. Seed
 
 ```bash
 make seed
@@ -140,7 +168,7 @@ make seed
 Issues four mandates — healthy, near-floor, breached, flat — and prints their trader keys so
 you can trade any of them from the UI.
 
-## 6. Indexer
+## 7. Indexer
 
 ```bash
 cd indexer && npm install && npm run dev
@@ -153,7 +181,7 @@ Without it the equity curve degrades to a recent-only window, because Monad's pu
 `eth_getLogs` at a 100-block range — about forty seconds of history. The chart says which
 source it is using.
 
-## 7. Frontend
+## 8. Frontend
 
 ```bash
 make web       # http://localhost:3000
