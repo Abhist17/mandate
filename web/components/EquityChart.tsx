@@ -46,8 +46,28 @@ const fmtMoney = (v: number) =>
 const fmtMoney2 = (v: number) =>
   v.toLocaleString("en-US", {style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-const fmtTime = (t: number) =>
-  new Date(t * 1000).toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+/**
+ * Tick format follows the span of the data, not a fixed pattern.
+ *
+ * Marks land ~400ms apart on Monad, so a freshly seeded mandate's whole history can sit
+ * inside one minute — and an axis of six identical "03:15" labels reads as a broken chart.
+ * Seconds below an hour, days above a day.
+ */
+function tickFormatter(spanSeconds: number) {
+  if (spanSeconds < 3600) {
+    return (t: number) =>
+      new Date(t * 1000).toLocaleTimeString("en-GB", {
+        minute: "2-digit",
+        second: "2-digit",
+      });
+  }
+  if (spanSeconds < 86_400) {
+    return (t: number) =>
+      new Date(t * 1000).toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+  }
+  return (t: number) =>
+    new Date(t * 1000).toLocaleDateString("en-GB", {day: "2-digit", month: "short"});
+}
 
 function ChartTooltip({active, payload}: {active?: boolean; payload?: {payload: EquityPoint}[]}) {
   if (!active || !payload?.length) return null;
@@ -103,6 +123,8 @@ export function EquityChart({points, allocation, breached, height = 340}: Props)
 
   const last = points[points.length - 1]!;
   const healthy = last.equity >= last.floor;
+  const span = last.t - points[0]!.t;
+  const fmtTick = tickFormatter(span);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -118,7 +140,7 @@ export function EquityChart({points, allocation, breached, height = 340}: Props)
 
         <XAxis
           dataKey="t"
-          tickFormatter={fmtTime}
+          tickFormatter={fmtTick}
           stroke="#3d4455"
           tick={{fill: "#5f6879", fontSize: 11, fontFamily: "ui-monospace"}}
           tickLine={false}

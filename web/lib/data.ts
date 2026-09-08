@@ -73,39 +73,54 @@ export type PoolStats = {
 
 const NOTIONAL_DIVISOR = 10n ** 20n;
 
-function tupleToTerms(t: readonly unknown[]): Terms {
+/**
+ * Read a struct field returned by viem.
+ *
+ * viem decodes a tuple whose ABI components are NAMED into an object keyed by those names,
+ * and one with unnamed components into a positional array. Our contract ABIs name their
+ * fields, so these come back as objects — indexing them positionally silently yields
+ * `undefined` for every field, which then surfaces far away as
+ * "Cannot read properties of undefined". Reading by name with a positional fallback works
+ * for either shape and cannot fail quietly.
+ */
+function field<T>(struct: unknown, name: string, index: number): T {
+  const s = struct as Record<string, unknown> & ArrayLike<unknown>;
+  return (name in s ? s[name] : s[index]) as T;
+}
+
+function tupleToTerms(t: unknown): Terms {
   return {
-    allocation: t[0] as bigint,
-    maxDrawdownBps: Number(t[1]),
-    dailyLossBps: Number(t[2]),
-    profitSplitBps: Number(t[3]),
-    maxPositionBps: Number(t[4]),
-    expiry: t[5] as bigint,
-    resetHourUtc: Number(t[6]),
-    drawdownMode: Number(t[7]),
-    maxConsistencyBps: Number(t[8]),
-    minProfitableDays: Number(t[9]),
-    payoutCushionBps: Number(t[10]),
-    touchIsBreach: Boolean(t[11]),
+    allocation: field<bigint>(t, "allocation", 0),
+    maxDrawdownBps: Number(field(t, "maxDrawdownBps", 1)),
+    dailyLossBps: Number(field(t, "dailyLossBps", 2)),
+    profitSplitBps: Number(field(t, "profitSplitBps", 3)),
+    maxPositionBps: Number(field(t, "maxPositionBps", 4)),
+    expiry: field<bigint>(t, "expiry", 5),
+    resetHourUtc: Number(field(t, "resetHourUtc", 6)),
+    drawdownMode: Number(field(t, "drawdownMode", 7)),
+    maxConsistencyBps: Number(field(t, "maxConsistencyBps", 8)),
+    minProfitableDays: Number(field(t, "minProfitableDays", 9)),
+    payoutCushionBps: Number(field(t, "payoutCushionBps", 10)),
+    touchIsBreach: Boolean(field(t, "touchIsBreach", 11)),
   };
 }
 
-function tupleToState(t: readonly unknown[]): MandateState {
+function tupleToState(t: unknown): MandateState {
   return {
-    trader: t[0] as Address,
-    account: t[1] as Address,
-    highWaterMark: t[2] as bigint,
-    dayStartEquity: t[3] as bigint,
-    dayStartBalance: t[4] as bigint,
-    dayStartTime: t[5] as bigint,
-    lastMarkedEquity: t[6] as bigint,
-    lastMarkedAt: t[7] as bigint,
-    issuedAt: t[8] as bigint,
-    largestDailyGain: t[9] as bigint,
-    profitableDays: Number(t[10]),
-    tradingDays: Number(t[11]),
-    status: Number(t[12]),
-    breachKind: Number(t[13]),
+    trader: field<Address>(t, "trader", 0),
+    account: field<Address>(t, "account", 1),
+    highWaterMark: field<bigint>(t, "highWaterMark", 2),
+    dayStartEquity: field<bigint>(t, "dayStartEquity", 3),
+    dayStartBalance: field<bigint>(t, "dayStartBalance", 4),
+    dayStartTime: field<bigint>(t, "dayStartTime", 5),
+    lastMarkedEquity: field<bigint>(t, "lastMarkedEquity", 6),
+    lastMarkedAt: field<bigint>(t, "lastMarkedAt", 7),
+    issuedAt: field<bigint>(t, "issuedAt", 8),
+    largestDailyGain: field<bigint>(t, "largestDailyGain", 9),
+    profitableDays: Number(field(t, "profitableDays", 10)),
+    tradingDays: Number(field(t, "tradingDays", 11)),
+    status: Number(field(t, "status", 12)),
+    breachKind: Number(field(t, "breachKind", 13)),
   };
 }
 
@@ -130,7 +145,7 @@ async function readPositions(account: Address): Promise<Position[]> {
         size: bigint;
         entryPrice: bigint;
         margin: bigint;
-      }>,
+      }>, // named components, so viem returns an object — see `field` above
       publicClient
         .readContract({address: ADDR.oracle, abi: oracleAbi, functionName: "price", args: [marketId]})
         .then((r) => (r as readonly [bigint, bigint])[0]),
@@ -159,9 +174,9 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
     publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "stateOf", args: [id]}),
   ]);
 
-  const state = tupleToState(stateTuple as unknown as readonly unknown[]);
+  const state = tupleToState(stateTuple);
   if (state.status === 0) return undefined;
-  const terms = tupleToTerms(termsTuple as unknown as readonly unknown[]);
+  const terms = tupleToTerms(termsTuple);
 
   const isActive = state.status === 1;
 

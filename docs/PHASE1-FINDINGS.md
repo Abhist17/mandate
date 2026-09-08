@@ -33,11 +33,21 @@ curl -s -X POST https://testnet-rpc.monad.xyz -H 'Content-Type: application/json
 
 Live markets on testnet at time of writing:
 
-| Market | ID | Price decimals | Size decimals | Initial margin | Maint. margin | Maker/taker fee |
+| Market | ID | Price decimals | Size decimals | `initial_margin` | `maintenance_margin` | maker / taker |
 |---|---|---|---|---|---|---|
-| BTC Perp | 16 | 1 | 5 | 1500 (15%) | 2500 | 90 / 690 bps‱ |
-| ETH Perp | 32 | 2 | 3 | 1200 (12%) | 2000 | 90 / 690 |
-| SOL Perp | 48 | — | — | — | — | — |
+| BTC Perp | 16 | 1 | 5 | 1500 | 2500 | 90 / 690 |
+| ETH Perp | 32 | 2 | 3 | 1200 | 2000 | 90 / 690 |
+| SOL Perp | 48 | 2 | 2 | 1000 | 2000 | 90 / 690 |
+
+**Fees** are millionths of notional: `690` → **0.069%**, a realistic taker fee. (Reading them
+as basis points would give 6.9%, which no perp venue charges.) `MiniPerp` uses the same scale.
+
+**Margin integers are quoted raw, on purpose.** Perpl's public docs do not state their units,
+and the live values contradict the obvious reading: BTC reports `initial_margin: 1500` and
+`maintenance_margin: 2500`, and a maintenance requirement *above* the initial one would make
+every position liquidatable the instant it opened. Rather than guess, `MiniPerp` defines its
+own margin model explicitly in bps of notional (BTC 15% initial / 7.5% maintenance) and the
+divergence is recorded here instead of being papered over.
 
 Market IDs are network-specific and the docs explicitly say to discover them at runtime
 via `GET /api/v1/pub/context` rather than hard-coding. The keeper does exactly that.

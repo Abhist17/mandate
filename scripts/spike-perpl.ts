@@ -101,8 +101,8 @@ async function main() {
   console.log();
   console.log(
     "    " +
-      ["market", "id", "oracle", "mark", "spread", "init mgn", "maint", "taker"]
-        .map((h, i) => h.padEnd([8, 4, 12, 12, 8, 9, 7, 6][i]!))
+      ["market", "id", "oracle", "mark", "spread", "taker", "im(raw)", "mm(raw)"]
+        .map((h, i) => h.padEnd([8, 4, 12, 12, 8, 9, 9, 8][i]!))
         .join("")
   );
   console.log("    " + "─".repeat(70));
@@ -121,9 +121,17 @@ async function main() {
         usd(oracle).padEnd(12) +
         usd(mark).padEnd(12) +
         `${spreadBps.toFixed(1)}bp`.padEnd(8) +
-        `${(m.config.initial_margin / 100).toFixed(0)}%`.padEnd(9) +
-        `${(m.config.maintenance_margin / 100).toFixed(0)}%`.padEnd(7) +
-        `${(m.config.taker_fee / 100).toFixed(2)}%`
+        // Fees are millionths of notional: 690 -> 0.069%, which is a realistic taker fee.
+        // (690/100 = 6.9% would not be.) MiniPerp uses the same scale.
+        `${((m.config.taker_fee / 1e6) * 100).toFixed(3)}%`.padEnd(9) +
+        // Margin config integers are printed RAW. Perpl's public docs do not state their
+        // units, and the live values are self-contradictory under the obvious reading —
+        // BTC shows initial 1500 and maintenance 2500, and a maintenance requirement above
+        // the initial one would make every position liquidatable the moment it opens. Rather
+        // than assert an interpretation we cannot verify, MiniPerp defines its own margin
+        // model explicitly in bps of notional. See docs/RESEARCH.md.
+        `${m.config.initial_margin}`.padEnd(9) +
+        `${m.config.maintenance_margin}`
     );
   }
   console.log();

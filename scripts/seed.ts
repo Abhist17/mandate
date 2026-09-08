@@ -75,6 +75,10 @@ async function main() {
           profitSplitBps: 8_000,
           maxPositionBps: 30_000,
           expiry,
+          // A real consistency rule, so the payout panel shows the arithmetic rather than
+          // "no conditions". 35% is the 2-Step On-Demand threshold. The risk terms are left
+          // alone deliberately — the four seeded states depend on them.
+          maxConsistencyBps: 3_500,
         }),
       ],
     });
