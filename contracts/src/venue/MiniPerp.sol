@@ -77,6 +77,20 @@ contract MiniPerp is IPerpVenue, Ownable, ReentrancyGuard {
     /// @notice Addresses permitted to call {flatten}. The MandateRegistry holds this.
     mapping(address => bool) public flatteners;
 
+    /// @notice Asset backing the venue's obligations beyond posted collateral.
+    ///
+    /// @dev A real exchange pays a winning long out of a losing short. MiniPerp has no order
+    ///      book and no natural counterparty — each mandate account trades against the venue
+    ///      itself — so a profitable position has to be paid from somewhere. That somewhere
+    ///      is this reserve, which is the same role an exchange insurance fund plays.
+    ///
+    ///      Stated plainly because it is a real property of the design, not an oversight:
+    ///      MiniPerp is a settlement venue for testing risk enforcement, and its solvency is
+    ///      an assumption rather than a market outcome. Losing positions pay into it and
+    ///      winning ones draw from it; if it empties, withdrawals revert with
+    ///      {Errors-InsufficientVenueLiquidity} rather than failing as an opaque ERC-20 error.
+    uint256 public reserveContributed;
+
     mapping(uint16 => Market) internal _markets;
     mapping(address => uint256) internal _freeCollateral;
     mapping(address => mapping(uint16 => Types.Position)) internal _positions;
@@ -87,6 +101,7 @@ contract MiniPerp is IPerpVenue, Ownable, ReentrancyGuard {
     event MarketListed(uint16 indexed marketId, uint16 initialMarginBps, uint16 maintenanceMarginBps);
     event MarketStatusSet(uint16 indexed marketId, bool open);
     event Deposited(address indexed account, uint256 amount);
+    event ReserveFunded(address indexed by, uint256 amount, uint256 totalContributed);
     event Withdrawn(address indexed account, uint256 amount);
     event PositionOpened(
         address indexed account,
@@ -204,14 +219,34 @@ contract MiniPerp is IPerpVenue, Ownable, ReentrancyGuard {
         emit Deposited(msg.sender, amount);
     }
 
+    /// @notice Contribute to the venue's reserve. Permissionless — anyone may backstop it.
+    /// @dev See {reserveContributed} for why a venue with no order book needs one at all.
+    function fundReserve(uint256 amount) external nonReentrant {
+        if (amount == 0) revert Errors.ZeroAmount();
+        assetToken.safeTransferFrom(msg.sender, address(this), amount);
+        reserveContributed += amount;
+        emit ReserveFunded(msg.sender, amount, reserveContributed);
+    }
+
     /// @inheritdoc IPerpVenue
     function withdraw(uint256 amount) external nonReentrant {
         if (amount == 0) revert Errors.ZeroAmount();
         uint256 free = _freeCollateral[msg.sender];
         if (amount > free) revert Errors.InsufficientMargin(amount, free);
+
+        // Fail loudly if the reserve cannot cover a winning position, rather than surfacing
+        // an opaque ERC-20 balance error from three calls deep.
+        uint256 held = assetToken.balanceOf(address(this));
+        if (amount > held) revert Errors.InsufficientVenueLiquidity(amount, held);
+
         _freeCollateral[msg.sender] = free - amount;
         assetToken.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
+    }
+
+    /// @notice Asset the venue holds right now.
+    function liquidity() external view returns (uint256) {
+        return assetToken.balanceOf(address(this));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

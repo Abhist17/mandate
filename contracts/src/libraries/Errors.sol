@@ -55,6 +55,8 @@ library Errors {
     error InsufficientMargin(uint256 required, uint256 available);
     error SlippageExceeded(uint256 executionPrice, uint256 limitPrice);
     error SizeTooSmall(uint256 size, uint256 minSize);
+    /// @dev The venue does not hold enough asset to pay a winning position out.
+    error InsufficientVenueLiquidity(uint256 requested, uint256 available);
 
     // ── oracle ────────────────────────────────────────────────────────────────
     error StalePrice(uint16 marketId, uint64 publishedAt, uint64 maxAge);
