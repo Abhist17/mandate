@@ -417,3 +417,31 @@ export const erc20Abi = [
     stateMutability: "nonpayable",
   },
 ] as const;
+
+export const demoIssuerAbi = [
+  {type: "function", name: "claim", inputs: [], outputs: [{type: "uint256"}], stateMutability: "nonpayable"},
+  {
+    type: "function",
+    name: "claimStatus",
+    inputs: [{name: "who", type: "address"}],
+    outputs: [
+      {name: "claimable", type: "bool"},
+      {name: "reason", type: "string"},
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "mandateOf",
+    inputs: [{name: "", type: "address"}],
+    outputs: [{type: "uint256"}],
+    stateMutability: "view",
+  },
+  {type: "function", name: "allocation", inputs: [], outputs: [{type: "uint256"}], stateMutability: "view"},
+  {type: "function", name: "maxDrawdownBps", inputs: [], outputs: [{type: "uint16"}], stateMutability: "view"},
+  {type: "function", name: "dailyLossBps", inputs: [], outputs: [{type: "uint16"}], stateMutability: "view"},
+  {type: "function", name: "profitSplitBps", inputs: [], outputs: [{type: "uint16"}], stateMutability: "view"},
+  {type: "function", name: "maxPositionBps", inputs: [], outputs: [{type: "uint16"}], stateMutability: "view"},
+  {type: "function", name: "claimsMade", inputs: [], outputs: [{type: "uint256"}], stateMutability: "view"},
+  {type: "function", name: "maxClaims", inputs: [], outputs: [{type: "uint256"}], stateMutability: "view"},
+] as const;

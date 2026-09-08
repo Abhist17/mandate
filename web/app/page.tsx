@@ -3,10 +3,12 @@
 import {useEffect, useMemo, useState} from "react";
 import {EquityChart} from "@/components/EquityChart";
 import {TradePanel} from "@/components/TradePanel";
+import {ClaimMandate} from "@/components/ClaimMandate";
 import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty} from "@/components/ui";
 import {fetchActiveIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
+import {useWallet} from "@/lib/useWallet";
 import {registryAbi} from "@/lib/abi";
 import {
   fmtUsd, fmtSigned, fmtBps, fmtPct, toNum, shortAddr, fmtCountdown, timeAgo, fmtSize, fmtPrice,
@@ -89,18 +91,22 @@ export default function TraderPage() {
 
   if (mandates.length === 0) {
     return (
-      <Panel title="No mandates">
-        <Empty>
-          Nothing issued yet. Run <span className="num text-txt-mid">npm run seed</span> to populate
-          the system.
-        </Empty>
-      </Panel>
+      <div className="mx-auto max-w-lg space-y-4 py-8">
+        <ClaimMandate onClaimed={setSelected} />
+        <Panel title="No mandates yet">
+          <Empty>
+            Nothing has been issued. Claim one above, or run{" "}
+            <span className="num text-txt-mid">npm run seed</span>.
+          </Empty>
+        </Panel>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
       <MandateStrip mandates={mandates} selected={selected} onSelect={setSelected} />
+      <ClaimBanner mandates={mandates} onClaimed={setSelected} />
       {mandate && (
         <TraderDetail
           mandate={mandate}
@@ -109,6 +115,40 @@ export default function TraderPage() {
           onDone={() => setSelected(mandate.id)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Shown only to a connected visitor who does not already have a mandate of their own.
+ * Someone already trading should not be nagged to claim another, and a disconnected visitor
+ * sees the dashboards first — the product should be legible before it asks for a wallet.
+ */
+function ClaimBanner({
+  mandates,
+  onClaimed,
+}: {
+  mandates: Mandate[];
+  onClaimed: (id: bigint) => void;
+}) {
+  const {address} = useWallet();
+  const [dismissed, setDismissed] = useState(false);
+  if (!address || dismissed) return null;
+
+  const owns = mandates.some(
+    (m) => m.state.trader.toLowerCase() === address.toLowerCase() && m.state.status === 1,
+  );
+  if (owns) return null;
+
+  return (
+    <div className="relative mx-auto max-w-lg">
+      <button
+        onClick={() => setDismissed(true)}
+        className="absolute right-2 top-2 z-10 px-2 py-1 text-2xs text-txt-lo hover:text-txt-hi"
+      >
+        dismiss
+      </button>
+      <ClaimMandate onClaimed={onClaimed} />
     </div>
   );
 }
