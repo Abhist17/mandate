@@ -1,0 +1,22 @@
+{
+  "name": "@mandate/keeper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mandate risk keeper — marks every open mandate against live prices, every block.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "simulate": "tsx src/simulate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.21.54",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

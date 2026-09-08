@@ -1,0 +1,54 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc_version = "0.8.24"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+bytecode_hash = "none"
+ffi = false
+fs_permissions = [{ access = "read", path = "./out" }]
+
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+[profile.default.fuzz]
+runs = 512
+max_test_rejects = 100000
+
+[profile.default.invariant]
+runs = 256
+depth = 64
+fail_on_revert = false
+call_override = false
+shrink_run_limit = 5000
+
+# CI profile: heavier fuzzing, used before submission
+[profile.ci.fuzz]
+runs = 5000
+
+[profile.ci.invariant]
+runs = 1024
+depth = 128
+
+[fmt]
+line_length = 110
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+multiline_func_header = "params_first"
+quote_style = "double"
+number_underscore = "thousands"
+
+# Monad testnet — chain id and RPC confirmed in docs/PHASE1-FINDINGS.md
+[rpc_endpoints]
+monad_testnet = "${MONAD_TESTNET_RPC}"
+
+[etherscan]
+monad_testnet = { key = "${MONAD_EXPLORER_API_KEY}", url = "https://sourcify-api-monad.blockvision.org", chain = 10143 }

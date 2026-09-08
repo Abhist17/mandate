@@ -1,0 +1,48 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/dry-run/
+contracts/lib/forge-std/
+contracts/lib/openzeppelin-contracts/
+
+# next
+web/.next/
+web/out/
+web/build/
+.next/
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# keeper local store
+keeper/data/
+*.sqlite
+*.sqlite3
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# os
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+*.swp
+
+# coverage
+lcov.info
+coverage/
