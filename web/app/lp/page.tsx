@@ -2,6 +2,7 @@
 
 import {useState} from "react";
 import {Panel, Stat, StatusPill, Field, Empty, LiveDot} from "@/components/ui";
+import {HeadroomBars, UtilisationBar, type HeadroomBarDatum} from "@/components/Charts";
 import {fetchMandate, fetchPoolStats, usePolled, type Mandate} from "@/lib/data";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
 import {registryAbi, poolExtraAbi, erc20Abi} from "@/lib/abi";
@@ -60,6 +61,15 @@ export default function LpPage() {
   }
 
   const active = mandates?.filter((m) => m.state.status === 1) ?? [];
+  const headroomData: HeadroomBarDatum[] = [...active]
+    .sort((a, b) => Number(a.headroomBps) - Number(b.headroomBps))
+    .slice(0, 12)
+    .map((m) => ({
+      label: `#${m.id}`,
+      headroomBps: Number(m.headroomBps),
+      headroom: Number(m.headroom) / 1e6,
+      equity: Number(m.liveEquity) / 1e6,
+    }));
   const closed = mandates?.filter((m) => m.state.status > 1) ?? [];
   const breachCount = closed.filter((m) => m.state.status === 2).length;
 
@@ -72,6 +82,26 @@ export default function LpPage() {
           <Stat label="Allocated" value={fmtUsd(pool?.allocated)} sub="locked inside live mandates" size="lg" />
           <Stat label="Utilisation" value={fmtBps(pool?.utilisationBps)} size="lg" />
           <Stat label="Price per share" value={fmtUsd(pool?.pricePerShare)} size="lg" />
+        </div>
+        <div className="border-t border-edge px-5 py-4">
+          <UtilisationBar
+            idle={Number(pool?.idle ?? 0n) / 1e6}
+            allocated={Number(pool?.allocated ?? 0n) / 1e6}
+          />
+        </div>
+      </Panel>
+
+      <Panel
+        title="Where the risk is"
+        right={<span className="text-2xs text-txt-lo">distance to floor, worst first</span>}
+      >
+        <div className="p-4">
+          <HeadroomBars data={headroomData} />
+          <p className="mt-2 text-2xs leading-relaxed text-txt-lo">
+            The question an LP actually has is not how much the pool has made — it is who is
+            about to blow up. Anything under the dashed line is one bad tick from being
+            enforced out.
+          </p>
         </div>
       </Panel>
 

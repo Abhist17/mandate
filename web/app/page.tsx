@@ -6,6 +6,7 @@ import {TradePanel} from "@/components/TradePanel";
 import {ClaimMandate} from "@/components/ClaimMandate";
 import {PayoutPanel} from "@/components/PayoutPanel";
 import {EnforceButton} from "@/components/EnforceButton";
+import {Onboarding} from "@/components/Onboarding";
 import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer} from "@/components/ui";
 import {fetchActiveIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
@@ -120,6 +121,7 @@ export default function TraderPage() {
   return (
     <div className="space-y-4">
       <Hero />
+      <Onboarding mandates={mandates} />
       <MandateStrip mandates={mandates} selected={selected} onSelect={setSelected} />
       <ClaimBanner mandates={mandates} onClaimed={setSelected} />
       {mandate && (

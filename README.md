@@ -171,6 +171,13 @@ LP deposits ──► CapitalPool ──► allocates ──► MandateAccount (
 | Indexer | `indexer/` | Envio HyperIndex — equity curves, fill history |
 | Frontend | `web/` | Trader view (equity curve + floor), LP view |
 
+## Sharing it with testers
+
+[SHARE.md](SHARE.md) has copy-paste posts, what to ask testers for, and answers to the two
+questions everyone asks. The app itself opens with a **Start here** checklist that walks a
+first-time visitor through sign-in, faucet, funding, first trade and the floor — so you should
+not have to onboard people one at a time.
+
 ## Try it (testnet, free, no signup)
 
 1. Open the app and **sign in** — connect a wallet, then sign a message. It's a signature,

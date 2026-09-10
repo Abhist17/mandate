@@ -3,6 +3,7 @@
 import {useState} from "react";
 import type {Address} from "viem";
 import {Panel, Stat, Field, Empty, Explainer, LiveDot} from "@/components/ui";
+import {OfferScatter, type OfferPoint} from "@/components/Charts";
 import {publicClient, ADDR, hasBook, isConfigured, explorerTx, shortAddrSafe} from "@/lib/chain";
 import {bookAbi, registryAbi, erc20Abi} from "@/lib/abi";
 import {useSession} from "@/lib/useSession";
@@ -123,6 +124,25 @@ export default function MarketPage() {
   const offers = data?.offers ?? [];
   const best = offers.filter((o) => o.qualifies).sort((a, b) => b.profitSplitBps - a.profitSplitBps)[0];
 
+  // Bubble size encodes how demanding the record requirement is, so the trade-off the market
+  // is making is visible without reading a single row.
+  const scatter: OfferPoint[] = offers.map((o) => {
+    const c = o.criteria;
+    const demand =
+      c.minMandatesSettled +
+      c.minProfitableExits +
+      (c.maxBreaches < NO_LIMIT ? 1 : 0) +
+      (c.maxConsistencyBps > 0 ? 1 : 0) +
+      (c.minDaysTraded > 0 ? 1 : 0);
+    return {
+      id: o.id.toString(),
+      allocation: Number(o.allocation) / 1e6,
+      splitPct: o.profitSplitBps / 100,
+      requirement: demand,
+      qualifies: o.qualifies,
+    };
+  });
+
   return (
     <div className="space-y-4">
       <Explainer>
@@ -143,6 +163,20 @@ export default function MarketPage() {
           it travels.
         </p>
       </Explainer>
+
+      <Panel
+        title="What capital is paying"
+        right={<span className="text-2xs text-txt-lo">bubble size = record required</span>}
+      >
+        <div className="p-4">
+          <OfferScatter data={scatter} />
+          <p className="mt-2 text-2xs leading-relaxed text-txt-lo">
+            Bigger cheques <em>and</em> better splits as the record required gets harder — the
+            offers march up and to the right. A prop firm&rsquo;s menu would be a single dot.
+            Green means your record already qualifies.
+          </p>
+        </div>
+      </Panel>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_1fr]">
         <RecordCard
