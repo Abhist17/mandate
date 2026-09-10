@@ -32,21 +32,39 @@ export function Stat({
   sub,
   tone = "neutral",
   size = "md",
+  emphasis = false,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   tone?: "neutral" | "up" | "down" | "warn";
-  size?: "md" | "lg" | "xl";
+  size?: "md" | "lg" | "xl" | "hero";
+  /** Adds a glow. Reserved for the single number the screen is really about. */
+  emphasis?: boolean;
 }) {
   const toneClass =
     tone === "up" ? "text-up" : tone === "down" ? "text-down" : tone === "warn" ? "text-warn" : "text-txt-hi";
-  const sizeClass = size === "xl" ? "text-3xl" : size === "lg" ? "text-xl" : "text-sm";
+  const sizeClass =
+    size === "hero"
+      ? "text-[2.6rem] leading-none"
+      : size === "xl"
+        ? "text-3xl leading-none"
+        : size === "lg"
+          ? "text-xl"
+          : "text-sm";
+  const glow =
+    emphasis && tone === "down"
+      ? "drop-shadow-[0_0_18px_rgba(255,61,85,0.45)]"
+      : emphasis && tone === "up"
+        ? "drop-shadow-[0_0_18px_rgba(0,227,155,0.4)]"
+        : emphasis && tone === "warn"
+          ? "drop-shadow-[0_0_18px_rgba(255,180,58,0.4)]"
+          : "";
   return (
     <div>
       <div className="stat-label">{label}</div>
-      <div className={`num mt-1 ${sizeClass} ${toneClass}`}>{value}</div>
-      {sub && <div className="mt-0.5 text-2xs text-txt-lo">{sub}</div>}
+      <div className={`figure font-mono mt-1.5 ${sizeClass} ${toneClass} ${glow}`}>{value}</div>
+      {sub && <div className="mt-1 text-2xs text-txt-lo">{sub}</div>}
     </div>
   );
 }
@@ -61,7 +79,9 @@ export function StatusPill({status}: {status: number}) {
   };
   const s = map[status] ?? map[0]!;
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wider ${s.cls}`}>
+    <span
+      className={`rounded-md border px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] ${s.cls}`}
+    >
       {s.label}
     </span>
   );
@@ -85,15 +105,27 @@ export function HeadroomBar({
 }) {
   const span = Math.max(peak - floor, 1e-9);
   const pct = Math.max(0, Math.min(100, ((equity - floor) / span) * 100));
-  const tone = pct <= 0 ? "bg-down" : pct < 20 ? "bg-down" : pct < 45 ? "bg-warn" : "bg-up";
+  const tone =
+    pct <= 0
+      ? "bg-down shadow-glow-down"
+      : pct < 20
+        ? "bg-down shadow-glow-down"
+        : pct < 45
+          ? "bg-warn"
+          : "bg-up shadow-glow";
+  const money = (v: number) =>
+    v.toLocaleString("en-US", {style: "currency", currency: "USD", maximumFractionDigits: 0});
   return (
-    <div className="space-y-1">
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-800">
-        <div className={`h-full rounded-full transition-all duration-500 ${tone}`} style={{width: `${pct}%`}} />
+    <div className="space-y-1.5">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-ink-800 ring-1 ring-inset ring-white/[0.04]">
+        <div
+          className={`h-full rounded-full transition-all duration-700 ease-out ${tone}`}
+          style={{width: `${pct}%`}}
+        />
       </div>
-      <div className="flex justify-between text-2xs text-txt-lo">
-        <span>floor</span>
-        <span>peak</span>
+      <div className="flex justify-between text-2xs">
+        <span className="text-down">{money(floor)} floor</span>
+        <span className="text-txt-lo">{money(peak)} peak</span>
       </div>
     </div>
   );
@@ -101,9 +133,24 @@ export function HeadroomBar({
 
 export function Field({label, value, mono = true}: {label: string; value: ReactNode; mono?: boolean}) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1.5">
+    <div className="flex items-baseline justify-between gap-4 py-2">
       <span className="text-xs text-txt-mid">{label}</span>
       <span className={`text-xs text-txt-hi ${mono ? "num" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * A one-line explanation of what the reader is looking at.
+ *
+ * Added after the person who commissioned this could not tell what the screen was for.
+ * If the author cannot, a stranger arriving from a Discord link certainly cannot — and the
+ * traction target depends on strangers understanding it unaided.
+ */
+export function Explainer({children}: {children: ReactNode}) {
+  return (
+    <div className="rounded-xl border border-edge bg-gradient-to-b from-ink-900 to-ink-950 px-5 py-4 shadow-panel">
+      {children}
     </div>
   );
 }

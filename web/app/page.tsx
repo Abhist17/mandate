@@ -5,7 +5,8 @@ import {EquityChart} from "@/components/EquityChart";
 import {TradePanel} from "@/components/TradePanel";
 import {ClaimMandate} from "@/components/ClaimMandate";
 import {PayoutPanel} from "@/components/PayoutPanel";
-import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty} from "@/components/ui";
+import {EnforceButton} from "@/components/EnforceButton";
+import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer} from "@/components/ui";
 import {fetchActiveIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
@@ -106,6 +107,7 @@ export default function TraderPage() {
 
   return (
     <div className="space-y-4">
+      <Hero />
       <MandateStrip mandates={mandates} selected={selected} onSelect={setSelected} />
       <ClaimBanner mandates={mandates} onClaimed={setSelected} />
       {mandate && (
@@ -154,6 +156,49 @@ function ClaimBanner({
   );
 }
 
+/**
+ * What this page is, in the time someone gives it before deciding to leave.
+ *
+ * A trader arriving from a Discord link has no idea what a "mandate" is. Three sentences and
+ * three terms, then the product.
+ */
+function Hero() {
+  return (
+    <Explainer>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="max-w-2xl">
+          <h1 className="text-base font-semibold tracking-tight text-txt-hi">
+            A prop firm where the rules are a smart contract
+          </h1>
+          <p className="mt-1.5 text-xs leading-relaxed text-txt-mid">
+            Traders get funded capital with the risk limits written into the contract. Every
+            block, the contract checks each account against those limits. Break one and it
+            closes your positions and takes the capital back — automatically, in the same
+            block. Make money and it pays you out.{" "}
+            <span className="text-txt-hi">Nobody can refuse the payout, and nobody has to
+            be trusted to enforce the rules</span> — the enforcement function is public, so
+            anyone can call it.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2.5">
+          <HeroStat k="Every block" v="marked" />
+          <HeroStat k="Enforcement" v="permissionless" />
+          <HeroStat k="Payout" v="automatic" />
+        </div>
+      </div>
+    </Explainer>
+  );
+}
+
+function HeroStat({k, v}: {k: string; v: string}) {
+  return (
+    <div className="rounded-lg border border-edge bg-ink-950/60 px-3 py-2">
+      <div className="text-2xs uppercase tracking-[0.12em] text-txt-lo">{k}</div>
+      <div className="num mt-0.5 text-xs text-up">{v}</div>
+    </div>
+  );
+}
+
 function MandateStrip({
   mandates,
   selected,
@@ -169,24 +214,44 @@ function MandateStrip({
         const active = m.state.status === 1;
         const bps = Number(m.headroomBps);
         const tone = !active ? "text-txt-lo" : bps < 150 ? "text-down" : bps < 350 ? "text-warn" : "text-up";
+        // Under its floor but not yet marked: anyone can end it right now.
+        const enforceable = active && m.liveEquity < m.floor;
         return (
           <button
             key={m.id.toString()}
             onClick={() => onSelect(m.id)}
-            className={`min-w-[190px] shrink-0 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+            className={`group min-w-[205px] shrink-0 rounded-xl border px-3.5 py-3 text-left transition-all duration-150 ${
               selected === m.id
-                ? "border-ink-500 bg-ink-850"
-                : "border-edge bg-ink-900 hover:border-ink-600"
+                ? "border-edge-hi bg-ink-850 shadow-panel-lg"
+                : "border-edge bg-ink-900 hover:border-edge-hi hover:bg-ink-850"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-2xs text-txt-lo">MANDATE #{m.id.toString()}</span>
-              <StatusPill status={m.state.status} />
+              <span className="text-2xs tracking-[0.1em] text-txt-lo">
+                MANDATE #{m.id.toString()}
+              </span>
+              {enforceable ? (
+                <span className="rounded-md border border-down/40 bg-down/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-down">
+                  Enforceable
+                </span>
+              ) : (
+                <StatusPill status={m.state.status} />
+              )}
             </div>
-            <div className="num mt-1.5 text-lg text-txt-hi">{fmtUsd(m.liveEquity)}</div>
-            <div className={`num text-2xs ${tone}`}>
+            <div className="figure font-mono mt-2 text-xl text-txt-hi">{fmtUsd(m.liveEquity)}</div>
+            <div className={`num mt-0.5 text-2xs ${tone}`}>
               {active ? `${fmtUsd(m.headroom)} to floor` : BREACH_KIND[m.state.breachKind] ?? "—"}
             </div>
+            {active && (
+              <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-ink-800">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    bps < 150 ? "bg-down" : bps < 350 ? "bg-warn" : "bg-up"
+                  }`}
+                  style={{width: `${Math.max(3, Math.min(100, bps / 50))}%`}}
+                />
+              </div>
+            )}
           </button>
         );
       })}
@@ -214,16 +279,20 @@ function TraderDetail({
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
       <div className="space-y-4">
+        <EnforceButton mandate={mandate} onDone={onDone} />
+
         {/* ── the answer ──────────────────────────────────────────────────── */}
         <Panel>
-          <div className="grid grid-cols-2 gap-5 p-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-6 p-5 md:grid-cols-4">
             <Stat label="Equity" value={fmtUsd(mandate.liveEquity)} size="xl" />
+            {/* The one number this screen exists for. Sized and lit accordingly. */}
             <Stat
               label="Distance to floor"
               value={active ? fmtUsd(mandate.headroom) : "—"}
-              sub={active ? fmtBps(mandate.headroomBps) : BREACH_KIND[state.breachKind]}
+              sub={active ? `${fmtBps(mandate.headroomBps)} of equity` : BREACH_KIND[state.breachKind]}
               tone={tone as "up" | "down" | "warn" | "neutral"}
-              size="xl"
+              size="hero"
+              emphasis={active}
             />
             <Stat
               label="P&L vs allocation"
@@ -238,7 +307,7 @@ function TraderDetail({
               size="lg"
             />
           </div>
-          <div className="border-t border-edge px-4 py-3">
+          <div className="border-t border-edge px-5 py-4">
             <HeadroomBar
               equity={toNum(mandate.liveEquity)}
               floor={toNum(mandate.floor)}
@@ -359,7 +428,7 @@ function PositionsTable({mandate}: {mandate: Mandate}) {
         </thead>
         <tbody>
           {mandate.positions.map((p) => (
-            <tr key={p.marketId} className="border-b border-edge/60 last:border-0">
+            <tr key={p.marketId} className="row-hover border-b border-edge/50 last:border-0">
               <td className="px-4 py-2.5">
                 <span className={`font-semibold ${p.isLong ? "text-up" : "text-down"}`}>
                   {p.isLong ? "LONG" : "SHORT"}

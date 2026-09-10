@@ -9,8 +9,19 @@
 
   html,
   body {
-    @apply bg-ink-950 text-txt-hi antialiased;
+    @apply bg-ink-980 text-txt-hi antialiased;
     font-feature-settings: "tnum" 1, "cv05" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* A very faint vignette stops a full-bleed near-black page reading as a void. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(120% 80% at 50% 0%, rgba(255, 255, 255, 0.022), transparent 70%);
+    z-index: 0;
   }
 
   /* Tabular figures everywhere numbers live: a column of prices that shifts width as digits
@@ -37,27 +48,34 @@
 
 @layer components {
   .panel {
-    @apply rounded-lg border border-edge bg-ink-900;
+    @apply relative rounded-xl border border-edge bg-ink-900 shadow-panel;
   }
   .panel-head {
-    @apply flex items-center justify-between border-b border-edge px-4 py-2.5;
+    @apply flex items-center justify-between border-b border-edge px-4 py-3;
   }
   .panel-title {
-    @apply text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo;
+    @apply text-2xs font-semibold uppercase tracking-[0.16em] text-txt-lo;
   }
   .btn {
-    @apply rounded border border-edge bg-ink-800 px-3 py-1.5 text-xs font-medium text-txt-hi
-           transition-colors hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply rounded-lg border border-edge bg-ink-800 px-3 py-2 text-xs font-medium text-txt-hi
+           transition-all duration-150 hover:border-edge-hi hover:bg-ink-700
+           active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35
+           disabled:hover:bg-ink-800;
   }
   .btn-up {
-    @apply border-up/30 bg-up/10 text-up hover:bg-up/20;
+    @apply border-up/25 bg-up/10 text-up hover:border-up/40 hover:bg-up/[0.16];
   }
   .btn-down {
-    @apply border-down/30 bg-down/10 text-down hover:bg-down/20;
+    @apply border-down/25 bg-down/10 text-down hover:border-down/40 hover:bg-down/[0.16];
   }
   .input {
-    @apply w-full rounded border border-edge bg-ink-950 px-2.5 py-1.5 text-sm text-txt-hi
-           outline-none transition-colors placeholder:text-txt-lo focus:border-ink-500;
+    @apply w-full rounded-lg border border-edge bg-ink-980 px-3 py-2 text-sm text-txt-hi
+           outline-none transition-colors placeholder:text-txt-lo
+           focus:border-edge-hi focus:ring-1 focus:ring-white/5;
+  }
+  /* Row that highlights on hover — used in every data table. */
+  .row-hover {
+    @apply transition-colors hover:bg-white/[0.02];
   }
   .stat-label {
     @apply text-2xs uppercase tracking-[0.12em] text-txt-lo;
@@ -68,9 +86,20 @@
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.85); }
 }
 .live-dot {
-  animation: pulse-dot 1.8s ease-in-out infinite;
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Key numbers get optical tightening so large figures don't look loose. */
+.figure {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+main {
+  position: relative;
+  z-index: 1;
 }

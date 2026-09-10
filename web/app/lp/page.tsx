@@ -66,7 +66,7 @@ export default function LpPage() {
   return (
     <div className="space-y-4">
       <Panel title="Capital pool" right={<LiveDot />}>
-        <div className="grid grid-cols-2 gap-5 p-4 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-6 p-5 md:grid-cols-5">
           <Stat label="Total value" value={fmtUsd(pool?.totalAssets)} size="xl" />
           <Stat label="Idle" value={fmtUsd(pool?.idle)} sub="available to allocate or withdraw" size="lg" />
           <Stat label="Allocated" value={fmtUsd(pool?.allocated)} sub="locked inside live mandates" size="lg" />
@@ -105,7 +105,7 @@ export default function LpPage() {
                       const bps = Number(m.headroomBps);
                       const tone = bps < 150 ? "text-down" : bps < 350 ? "text-warn" : "text-up";
                       return (
-                        <tr key={m.id.toString()} className="border-b border-edge/60 last:border-0">
+                        <tr key={m.id.toString()} className="row-hover border-b border-edge/50 last:border-0">
                           <td className="px-4 py-2.5">
                             <a
                               href={explorerAddr(m.state.account)}
@@ -168,7 +168,7 @@ export default function LpPage() {
                   {closed.map((m) => {
                     const delta = m.state.lastMarkedEquity - m.terms.allocation;
                     return (
-                      <tr key={m.id.toString()} className="border-b border-edge/60 last:border-0">
+                      <tr key={m.id.toString()} className="row-hover border-b border-edge/50 last:border-0">
                         <td className="num px-4 py-2.5 text-txt-hi">#{m.id.toString()}</td>
                         <td className="num px-4 py-2.5 text-txt-mid">{shortAddr(m.state.trader)}</td>
                         <td className="px-4 py-2.5">
