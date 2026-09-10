@@ -2,7 +2,7 @@
   "name": "mandate",
   "private": true,
   "version": "0.1.0",
-  "description": "Mandate — an onchain prop firm on Monad. The rules are the contract.",
+  "description": "Mandate \u2014 an onchain prop firm on Monad. The rules are the contract.",
   "license": "MIT",
   "workspaces": [
     "keeper",
@@ -14,7 +14,8 @@
     "web": "npm run dev -w web",
     "seed": "tsx scripts/seed.ts",
     "demo": "tsx scripts/demo.ts",
-    "typecheck": "tsc --noEmit -p keeper/tsconfig.json"
+    "typecheck": "tsc --noEmit -p keeper/tsconfig.json",
+    "seed:market": "tsx scripts/seed-market.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.2",

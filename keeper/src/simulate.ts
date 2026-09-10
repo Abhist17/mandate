@@ -93,6 +93,11 @@ async function main() {
         maxPositionBps: 30_000,
         expiry,
         resetHourUtc: 0,
+        drawdownMode: 1, // Trailing
+        maxConsistencyBps: 0,
+        minProfitableDays: 0,
+        payoutCushionBps: 0,
+        touchIsBreach: false,
       },
     ],
   });

@@ -26,10 +26,12 @@ export const ADDR = {
   oracle: asAddress(process.env.NEXT_PUBLIC_ORACLE),
   asset: asAddress(process.env.NEXT_PUBLIC_ASSET),
   demoIssuer: asAddress(process.env.NEXT_PUBLIC_DEMO_ISSUER),
+  book: asAddress(process.env.NEXT_PUBLIC_BOOK),
 };
 
 export const ZERO = "0x0000000000000000000000000000000000000000";
 export const hasDemoIssuer = ADDR.demoIssuer !== ZERO;
+export const hasBook = ADDR.book !== ZERO;
 
 export const isConfigured = ADDR.registry !== "0x0000000000000000000000000000000000000000";
 
@@ -45,3 +47,6 @@ export const MARKETS = [
 
 export const STATUS = ["None", "Active", "Breached", "Expired", "Closed"] as const;
 export const BREACH_KIND = ["None", "Trailing drawdown", "Daily loss", "Expiry"] as const;
+
+/** Convenience re-export guard used by the market page. */
+export const shortAddrSafe = true;

@@ -34,7 +34,39 @@ That number is unambiguous — you can see it on your own platform. They deny yo
 number is computed on their server, from their record of your trades, against a threshold you
 cannot independently check. The rule itself is reasonable. Its privacy is not.
 
-## We are not first, and the difference matters
+## What this actually is
+
+**Not a prop firm. The market that replaces one.**
+
+A prop firm publishes one set of terms — 10% drawdown, 80/20, pay us $500 to try — and every
+trader takes it or leaves. Terms are announced, not priced. And by their own description,
+*"the firm's revenue comes from two sources: challenge fees paid upfront, and a percentage of
+profitable traders' gains."* **They earn when you fail.**
+
+Worse: prove yourself at one firm and you start from zero at the next, because your record
+doesn't travel. That's why funded traders juggle 2–5 accounts and keep paying challenge fees.
+
+Mandate replaces that with a market:
+
+| | Prop firm | Mandate |
+|---|---|---|
+| Who sets terms | The firm, one menu for everyone | Any LP, competing |
+| Entry cost | Challenge fee, non-refundable | None |
+| Who profits if you fail | The firm | Nobody |
+| Your track record | Trapped inside that firm | Yours, portable, verifiable |
+| Who enforces the rules | Their private server | A public function anyone can call |
+
+An LP posts capital behind the record they want — *"no breaches, 3 settled mandates, best
+consistency under 25%: $250,000 at 92/8"*. Any trader who meets it takes it. No approval, no
+negotiation. Two LPs who want the same trader compete by improving their terms.
+
+**Why nobody has built this.** A market can't price a claim. It needs a record a stranger can
+trust without trusting its author — and a prop firm can't credibly vouch for a trader to a
+competitor. Our registry doesn't *attest* to your record, it *produces* it: every field is
+written by the same contract that enforced the rules it describes. No oracle, no issuer.
+`registry.recordOf(you)` is a primary record, and it's why the market underneath it can exist.
+
+## We are not first at onchain prop firms, and the difference matters
 
 Onchain prop firms already exist. [Propr.xyz](https://propr.xyz) (XBorg, backed by SwissBorg),
 Hypernova, Vanta Trading (Taoshi + Hyperliquid), GT Funded and others all launched in 2026.
@@ -54,7 +86,9 @@ DeFiPrime's survey of the category puts it exactly right:
 
 So the claim is specific and checkable: the category has made the *rules* and the *payout*
 onchain. The **risk engine that decides whether you breached** is still somebody's server.
-Mandate puts the enforcement loop itself onchain, and lets anyone run it.
+Mandate puts the enforcement loop itself onchain, and lets anyone run it — and then builds the
+thing that only becomes possible once you have: a market where capital prices trader risk
+directly, on a record nobody has to be trusted to vouch for.
 
 That is also the honest answer to "why Monad." An enforcement loop has to mark every open
 account every block, and that is only affordable at 400ms blocks and sub-cent gas. It is not
@@ -128,6 +162,7 @@ LP deposits ──► CapitalPool ──► allocates ──► MandateAccount (
 
 | Component | Path | Role |
 |---|---|---|
+| **`UnderwritingBook`** | `contracts/src/` | **The market — LPs post offers, traders claim on record** |
 | `RiskEngine` | `contracts/src/` | Pure drawdown/daily-loss/settlement maths |
 | `MandateAccount` | `contracts/src/` | Per-mandate clone, pre-trade constraint checks |
 | `MandateRegistry` | `contracts/src/` | Issuance, state, permissionless `markAndEnforce` |
@@ -185,7 +220,7 @@ See [SPEC.md](SPEC.md) for the build specification.
 - [x] Phase 0 — Scaffold
 - [x] Phase 1 — Venue gate resolved ([findings](docs/PHASE1-FINDINGS.md))
 - [x] Phase 2 — Core contracts
-- [x] Phase 3 — 227 tests, 10 invariants, fuzz
+- [x] Phase 3 — 250 tests, 10 invariants, fuzz
 - [x] Phase 4 — Keeper
 - [x] Phase 5 — Trader + LP frontend
 - [x] Phase 6 — Envio indexer
@@ -193,7 +228,7 @@ See [SPEC.md](SPEC.md) for the build specification.
 - [x] Phase 8 — Live breach demo
 
 ```
-forge test    227 passed, 0 failed
+forge test    250 passed, 0 failed
 coverage      RiskEngine 100% · MandateRegistry 100% · DemoIssuer 100%
               95.52% lines across contracts/src (the deploy script is excluded —
               coverage of a deploy script measures nothing)
@@ -229,7 +264,7 @@ interval) and marks against Perpl's own oracle. Full reasoning in
 ## Testing
 
 ```bash
-make test        # 227 tests
+make test        # 250 tests
 make coverage    # RiskEngine 99%, MandateRegistry 100%, 95%+ across src/
 make smoke       # renders both pages in a real browser, fails on any console error
 ```

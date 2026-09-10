@@ -27,6 +27,7 @@ export const addrs = () => ({
   venue: env("MINI_PERP_ADDRESS") as Address,
   registry: env("MANDATE_REGISTRY_ADDRESS") as Address,
   pool: env("CAPITAL_POOL_ADDRESS") as Address,
+  book: env("UNDERWRITING_BOOK_ADDRESS") as Address,
 });
 
 export const pub = createPublicClient({
@@ -55,7 +56,7 @@ export const abis = {
   registry: parseAbi([
     "function issue(address trader, (uint256,uint16,uint16,uint16,uint16,uint64,uint8,uint8,uint16,uint16,uint16,bool) terms) returns (uint256)",
     "function markAndEnforce(uint256 mandateId) returns (bool)",
-    "function stateOf(uint256) view returns ((address,address,uint256,uint256,uint256,uint64,uint256,uint64,uint64,uint256,uint32,uint32,uint8,uint8))",
+    "function stateOf(uint256) view returns ((address,address,address,uint256,uint256,uint256,uint64,uint256,uint64,uint64,uint256,uint32,uint32,uint8,uint8))",
     "function termsOf(uint256) view returns ((uint256,uint16,uint16,uint16,uint16,uint64,uint8,uint8,uint16,uint16,uint16,bool))",
     "function headroom(uint256) view returns (uint256,uint256)",
     "function floorOf(uint256) view returns (uint256,uint256)",
@@ -78,6 +79,12 @@ export const abis = {
     "function idleAssets() view returns (uint256)",
     "function pricePerShare() view returns (uint256)",
   ]),
+  book: parseAbi([
+    "function postOffer((uint256,uint16,uint16,uint16,uint16,uint64,uint8,uint8,uint16,uint16,uint16,bool) terms, (uint32,uint32,uint32,uint32,uint256,uint16) criteria, uint32 slots) returns (uint256)",
+    "function claim(uint256 offerId) returns (uint256)",
+    "function qualifies(uint256 offerId, address trader) view returns (bool,string)",
+    "function openOffers() view returns (uint256[])",
+  ]),
   venue: parseAbi([
     "function fundReserve(uint256 amount)",
     "function openMarkets(address) view returns (uint16[])",
@@ -94,6 +101,26 @@ export const usd = (v: bigint, d = 6) =>
 export const px = (v: bigint) => usd(v, 8);
 
 export const STATUS = ["None", "Active", "Breached", "Expired", "Closed"] as const;
+
+/** Criteria tuple in the order UnderwritingBook.postOffer expects. */
+export const NO_BREACH_LIMIT = 4_294_967_295;
+export function criteria(o: {
+  minMandatesSettled?: number;
+  maxBreaches?: number;
+  minProfitableExits?: number;
+  minDaysTraded?: number;
+  minRealisedProfit?: bigint;
+  maxConsistencyBps?: number;
+}) {
+  return [
+    o.minMandatesSettled ?? 0,
+    o.maxBreaches ?? NO_BREACH_LIMIT,
+    o.minProfitableExits ?? 0,
+    o.minDaysTraded ?? 0,
+    o.minRealisedProfit ?? 0n,
+    o.maxConsistencyBps ?? 0,
+  ] as const;
+}
 export const BREACH = ["None", "TrailingDrawdown", "DailyLoss", "Expiry"] as const;
 
 export const c = {

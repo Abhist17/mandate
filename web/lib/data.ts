@@ -23,6 +23,8 @@ export type Terms = {
 export type MandateState = {
   trader: Address;
   account: Address;
+  /** address(0) = funded by the shared pool; otherwise the LP underwriting this trader. */
+  backer: Address;
   highWaterMark: bigint;
   dayStartEquity: bigint;
   dayStartBalance: bigint;
@@ -109,18 +111,19 @@ function tupleToState(t: unknown): MandateState {
   return {
     trader: field<Address>(t, "trader", 0),
     account: field<Address>(t, "account", 1),
-    highWaterMark: field<bigint>(t, "highWaterMark", 2),
-    dayStartEquity: field<bigint>(t, "dayStartEquity", 3),
-    dayStartBalance: field<bigint>(t, "dayStartBalance", 4),
-    dayStartTime: field<bigint>(t, "dayStartTime", 5),
-    lastMarkedEquity: field<bigint>(t, "lastMarkedEquity", 6),
-    lastMarkedAt: field<bigint>(t, "lastMarkedAt", 7),
-    issuedAt: field<bigint>(t, "issuedAt", 8),
-    largestDailyGain: field<bigint>(t, "largestDailyGain", 9),
-    profitableDays: Number(field(t, "profitableDays", 10)),
-    tradingDays: Number(field(t, "tradingDays", 11)),
-    status: Number(field(t, "status", 12)),
-    breachKind: Number(field(t, "breachKind", 13)),
+    backer: field<Address>(t, "backer", 2),
+    highWaterMark: field<bigint>(t, "highWaterMark", 3),
+    dayStartEquity: field<bigint>(t, "dayStartEquity", 4),
+    dayStartBalance: field<bigint>(t, "dayStartBalance", 5),
+    dayStartTime: field<bigint>(t, "dayStartTime", 6),
+    lastMarkedEquity: field<bigint>(t, "lastMarkedEquity", 7),
+    lastMarkedAt: field<bigint>(t, "lastMarkedAt", 8),
+    issuedAt: field<bigint>(t, "issuedAt", 9),
+    largestDailyGain: field<bigint>(t, "largestDailyGain", 10),
+    profitableDays: Number(field(t, "profitableDays", 11)),
+    tradingDays: Number(field(t, "tradingDays", 12)),
+    status: Number(field(t, "status", 13)),
+    breachKind: Number(field(t, "breachKind", 14)),
   };
 }
 

@@ -62,6 +62,7 @@ export const registryAbi = [
         components: [
           {name: "trader", type: "address"},
           {name: "account", type: "address"},
+          {name: "backer", type: "address"},
           {name: "highWaterMark", type: "uint256"},
           {name: "dayStartEquity", type: "uint256"},
           {name: "dayStartBalance", type: "uint256"},
@@ -130,6 +131,30 @@ export const registryAbi = [
     ],
     outputs: [{type: "uint256"}],
     stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "recordOf",
+    inputs: [{name: "trader", type: "address"}],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          {name: "mandatesIssued", type: "uint32"},
+          {name: "mandatesSettled", type: "uint32"},
+          {name: "breaches", type: "uint32"},
+          {name: "profitableExits", type: "uint32"},
+          {name: "daysTraded", type: "uint32"},
+          {name: "capitalEntrusted", type: "uint256"},
+          {name: "realisedProfit", type: "uint256"},
+          {name: "realisedLoss", type: "uint256"},
+          {name: "bestConsistencyBps", type: "uint16"},
+          {name: "firstMandateAt", type: "uint64"},
+          {name: "lastSettledAt", type: "uint64"},
+        ],
+      },
+    ],
+    stateMutability: "view",
   },
   {
     type: "function",
@@ -507,4 +532,96 @@ export const demoIssuerAbi = [
   {type: "function", name: "maxPositionBps", inputs: [], outputs: [{type: "uint16"}], stateMutability: "view"},
   {type: "function", name: "claimsMade", inputs: [], outputs: [{type: "uint256"}], stateMutability: "view"},
   {type: "function", name: "maxClaims", inputs: [], outputs: [{type: "uint256"}], stateMutability: "view"},
+] as const;
+
+const termsComponents = [
+  {name: "allocation", type: "uint256"},
+  {name: "maxDrawdownBps", type: "uint16"},
+  {name: "dailyLossBps", type: "uint16"},
+  {name: "profitSplitBps", type: "uint16"},
+  {name: "maxPositionBps", type: "uint16"},
+  {name: "expiry", type: "uint64"},
+  {name: "resetHourUtc", type: "uint8"},
+  {name: "drawdownMode", type: "uint8"},
+  {name: "maxConsistencyBps", type: "uint16"},
+  {name: "minProfitableDays", type: "uint16"},
+  {name: "payoutCushionBps", type: "uint16"},
+  {name: "touchIsBreach", type: "bool"},
+] as const;
+
+const criteriaComponents = [
+  {name: "minMandatesSettled", type: "uint32"},
+  {name: "maxBreaches", type: "uint32"},
+  {name: "minProfitableExits", type: "uint32"},
+  {name: "minDaysTraded", type: "uint32"},
+  {name: "minRealisedProfit", type: "uint256"},
+  {name: "maxConsistencyBps", type: "uint16"},
+] as const;
+
+export const bookAbi = [
+  {
+    type: "function",
+    name: "openOffers",
+    inputs: [],
+    outputs: [{type: "uint256[]"}],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "offerAt",
+    inputs: [{name: "offerId", type: "uint256"}],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          {name: "lp", type: "address"},
+          {name: "allocation", type: "uint256"},
+          {name: "slotsTotal", type: "uint32"},
+          {name: "slotsTaken", type: "uint32"},
+          {name: "open", type: "bool"},
+          {name: "terms", type: "tuple", components: termsComponents},
+          {name: "criteria", type: "tuple", components: criteriaComponents},
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "qualifies",
+    inputs: [
+      {name: "offerId", type: "uint256"},
+      {name: "trader", type: "address"},
+    ],
+    outputs: [
+      {name: "ok", type: "bool"},
+      {name: "reason", type: "string"},
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "claim",
+    inputs: [{name: "offerId", type: "uint256"}],
+    outputs: [{type: "uint256"}],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "postOffer",
+    inputs: [
+      {name: "terms", type: "tuple", components: termsComponents},
+      {name: "criteria", type: "tuple", components: criteriaComponents},
+      {name: "slots", type: "uint32"},
+    ],
+    outputs: [{type: "uint256"}],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "withdrawOffer",
+    inputs: [{name: "offerId", type: "uint256"}],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
 ] as const;

@@ -153,7 +153,7 @@ async function main() {
     const st = await pub.readContract({
       address: a.registry, abi: abis.registry, functionName: "stateOf", args: [s.id],
     });
-    const status = STATUS[Number(st[12])]!;
+    const status = STATUS[Number(st[13])]!;
     let room = "—";
     if (status === "Active") {
       const [abs, bps] = await pub.readContract({
@@ -164,7 +164,7 @@ async function main() {
     const colour = status === "Breached" ? c.red : status === "Active" ? c.green : c.yellow;
     console.log(
       `  #${String(s.id).padEnd(3)} ${s.label.padEnd(11)} ${colour}${status.padEnd(9)}${c.r}` +
-      ` equity ${usd(st[6]).padStart(12)}  headroom ${room}`,
+      ` equity ${usd(st[7]).padStart(12)}  headroom ${room}`,
     );
   }
 
