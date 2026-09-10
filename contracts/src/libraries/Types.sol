@@ -84,6 +84,11 @@ library Types {
     struct MandateState {
         address trader;
         address account; // MandateAccount clone that holds the capital
+        /// @dev Who put up the capital. `address(0)` means the shared {CapitalPool}; any other
+        ///      address is an LP underwriting this trader directly, and settlement returns to
+        ///      them rather than to the pool. This is what makes terms a market rather than a
+        ///      menu — see {UnderwritingBook}.
+        address backer;
         uint256 highWaterMark; // peak equity ever observed; ratchets up, never down
         uint256 dayStartEquity; // equity at the start of the current loss window
         uint256 dayStartBalance; // realised balance at the start of the window
@@ -97,6 +102,27 @@ library Types {
         uint32 tradingDays; // completed days
         Status status;
         BreachKind breachKind;
+    }
+
+    /// @notice A trader's lifetime record, produced by the enforcement contract itself.
+    ///
+    /// @dev The point is that this is a *primary record*, not an attestation. Every field is
+    ///      written by the same contract that enforced the rules it summarises, so there is
+    ///      no oracle to trust and no issuer to vouch for it. That is the whole reason a
+    ///      track record can be portable here and cannot be anywhere else: a prop firm cannot
+    ///      credibly vouch for a trader to a competitor, and no competitor would believe them.
+    struct TraderRecord {
+        uint32 mandatesIssued;
+        uint32 mandatesSettled; // reached any terminal state
+        uint32 breaches; // ended by a risk breach
+        uint32 profitableExits; // closed or expired above the allocation
+        uint32 daysTraded; // completed daily windows across all mandates
+        uint256 capitalEntrusted; // lifetime allocation total
+        uint256 realisedProfit; // lifetime profit above allocation at settlement
+        uint256 realisedLoss; // lifetime shortfall below allocation at settlement
+        uint16 bestConsistencyBps; // best (lowest) score at a profitable exit; 0 = none yet
+        uint64 firstMandateAt;
+        uint64 lastSettledAt;
     }
 
     /// @notice A single isolated-margin perp position on the venue.

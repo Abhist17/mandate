@@ -9,6 +9,7 @@ import {MandateAccount} from "../src/MandateAccount.sol";
 import {MandateRegistry} from "../src/MandateRegistry.sol";
 import {CapitalPool} from "../src/CapitalPool.sol";
 import {DemoIssuer} from "../src/DemoIssuer.sol";
+import {UnderwritingBook} from "../src/UnderwritingBook.sol";
 import {MockERC20} from "../test/utils/MockERC20.sol";
 
 /// @title Deploy
@@ -54,6 +55,7 @@ contract Deploy is Script {
         address deployer;
         address keeper;
         address demoIssuer;
+        address book;
     }
 
     Deployed internal d;
@@ -128,6 +130,10 @@ contract Deploy is Script {
         DemoIssuer demoIssuer = new DemoIssuer(deployer, address(registry));
         registry.setIssuer(address(demoIssuer), true);
 
+        // The market for trader risk. Needs no issuer role: it only ever commits capital its
+        // own LPs escrowed, never the pool's.
+        UnderwritingBook book = new UnderwritingBook(address(registry), address(assetToken));
+
         // ── seed ──────────────────────────────────────────────────────────────────
         assetToken.mint(deployer, VENUE_RESERVE + POOL_SEED);
 
@@ -149,6 +155,7 @@ contract Deploy is Script {
         console2.log("MANDATE_REGISTRY_ADDRESS    =", address(registry));
         console2.log("CAPITAL_POOL_ADDRESS        =", address(pool));
         console2.log("DEMO_ISSUER_ADDRESS         =", address(demoIssuer));
+        console2.log("UNDERWRITING_BOOK_ADDRESS   =", address(book));
         console2.log("");
         console2.log("Next: push a first price, then run `make seed`.");
 
@@ -161,7 +168,8 @@ contract Deploy is Script {
             pool: address(pool),
             deployer: deployer,
             keeper: keeper,
-            demoIssuer: address(demoIssuer)
+            demoIssuer: address(demoIssuer),
+            book: address(book)
         });
         _writeDeploymentFile();
     }
@@ -176,7 +184,8 @@ contract Deploy is Script {
             _row("MiniPerp", d.venue),
             _row("PriceOracle", d.oracle),
             _row("Asset (mUSD)", d.asset),
-            _row("DemoIssuer", d.demoIssuer)
+            _row("DemoIssuer", d.demoIssuer),
+            _row("UnderwritingBook", d.book)
         );
 
         string memory env = string.concat(
@@ -187,6 +196,7 @@ contract Deploy is Script {
             "MANDATE_REGISTRY_ADDRESS=", vm.toString(d.registry), "\n",
             "CAPITAL_POOL_ADDRESS=", vm.toString(d.pool), "\n",
             "DEMO_ISSUER_ADDRESS=", vm.toString(d.demoIssuer), "\n",
+            "UNDERWRITING_BOOK_ADDRESS=", vm.toString(d.book), "\n",
             "INDEXER_START_BLOCK=", vm.toString(block.number), "\n"
         );
 

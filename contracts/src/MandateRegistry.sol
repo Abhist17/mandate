@@ -61,6 +61,11 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     mapping(uint256 => Types.MandateState) internal _states;
     mapping(address => uint256[]) internal _mandatesOf;
 
+    /// @notice Lifetime record per trader, written by settlement.
+    /// @dev See {Types-TraderRecord} for why this being a primary record rather than an
+    ///      attestation is the whole point.
+    mapping(address => Types.TraderRecord) internal _records;
+
     /// @notice Every mandate currently in the Active state.
     uint256[] internal _activeMandates;
     mapping(uint256 => uint256) internal _activeIndex; // mandateId => index+1, 0 = not active
@@ -100,6 +105,15 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         uint256 finalEquity,
         uint256 traderPayout,
         uint256 poolReturn
+    );
+    event MandateBacked(uint256 indexed mandateId, address indexed backer, uint256 allocation);
+    event TraderRecordUpdated(
+        address indexed trader,
+        uint32 mandatesSettled,
+        uint32 breaches,
+        uint32 profitableExits,
+        uint256 realisedProfit,
+        uint16 bestConsistencyBps
     );
     event IssuerSet(address indexed issuer, bool allowed);
     event PoolSet(address indexed pool);
@@ -167,6 +181,42 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         nonReentrant
         returns (uint256 mandateId)
     {
+        return _issue(trader, terms, address(0));
+    }
+
+    /// @notice Issue a mandate funded by the caller rather than by the shared pool.
+    ///
+    /// @dev The caller must have approved `terms.allocation` of the asset to this contract.
+    ///      They become the mandate's `backer`: they carry its entire P&L, and settlement
+    ///      returns to them rather than to the pool.
+    ///
+    ///      This is the mechanism behind {UnderwritingBook}, and behind the claim that
+    ///      Mandate is a market rather than a firm. In the incumbent model one firm sets the
+    ///      terms and every trader takes them or leaves. Here any LP can put up capital
+    ///      against a *specific* trader on *their own* terms, and a trader with a better
+    ///      record can be offered better ones. Terms become priced instead of published.
+    ///
+    ///      Deliberately NOT permissioned to issuers: anyone willing to risk their own money
+    ///      on a trader may do so. The issuer role exists to protect *pooled* capital, and
+    ///      there is no pooled capital at risk here.
+    ///      `backer` is separated from the payer on purpose. A venue like {UnderwritingBook}
+    ///      escrows an LP's capital and calls this on their behalf, so the address paying is
+    ///      the book while the address that must receive the settlement is the LP. Collapsing
+    ///      the two would send every backed mandate's proceeds to the contract that brokered
+    ///      it. The payer names the beneficiary because the payer is the one giving up money.
+    function issueBacked(address trader, Types.Terms calldata terms, address backer)
+        external
+        nonReentrant
+        returns (uint256 mandateId)
+    {
+        if (backer == address(0)) revert Errors.ZeroAddress();
+        return _issue(trader, terms, backer);
+    }
+
+    function _issue(address trader, Types.Terms memory terms, address backer)
+        internal
+        returns (uint256 mandateId)
+    {
         if (trader == address(0)) revert Errors.ZeroAddress();
         RiskEngine.validateTerms(terms, uint64(block.timestamp));
 
@@ -186,12 +236,19 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         // exactly the amount being allocated, and so inflating the cap that is supposed to
         // bound it. A 25% allocation would pass a 20% cap. Found by
         // CapitalPool.t.sol::test_allocate_respectsMaxAllocationBps.
-        pool.allocate(account, terms.allocation);
+        if (backer == address(0)) {
+            pool.allocate(account, terms.allocation);
+        } else {
+            // Capital comes from the caller; `backer` is who it returns to at settlement.
+            // The pool is not involved and takes none of the risk.
+            assetToken.safeTransferFrom(msg.sender, account, terms.allocation);
+        }
         MandateAccount(account).fundVenue(terms.allocation);
 
         _states[mandateId] = Types.MandateState({
             trader: trader,
             account: account,
+            backer: backer,
             highWaterMark: terms.allocation,
             dayStartEquity: terms.allocation,
             dayStartBalance: terms.allocation,
@@ -209,6 +266,13 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         _mandatesOf[trader].push(mandateId);
         _activeMandates.push(mandateId);
         _activeIndex[mandateId] = _activeMandates.length;
+
+        Types.TraderRecord storage rec = _records[trader];
+        if (rec.firstMandateAt == 0) rec.firstMandateAt = uint64(block.timestamp);
+        rec.mandatesIssued += 1;
+        rec.capitalEntrusted += terms.allocation;
+
+        if (backer != address(0)) emit MandateBacked(mandateId, backer, terms.allocation);
 
         emit MandateIssued(
             mandateId,
@@ -451,12 +515,65 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         s.lastMarkedAt = uint64(block.timestamp);
         _removeActive(mandateId);
 
-        // 4. pay
+        // 4. pay whoever put the capital up
         if (traderPayout > 0) assetToken.safeTransfer(s.trader, traderPayout);
-        if (poolReturn > 0) assetToken.safeTransfer(address(pool), poolReturn);
-        pool.onMandateSettled(mandateId, terms.allocation, poolReturn);
+        if (s.backer == address(0)) {
+            if (poolReturn > 0) assetToken.safeTransfer(address(pool), poolReturn);
+            pool.onMandateSettled(mandateId, terms.allocation, poolReturn);
+        } else {
+            // A backed mandate never touched pool capital, so the pool is not told about it
+            // and its accounting is untouched. The backer takes the whole result.
+            if (poolReturn > 0) assetToken.safeTransfer(s.backer, poolReturn);
+        }
+
+        _writeRecord(s, terms, finalEquity, finalStatus);
 
         emit Settled(mandateId, finalStatus, finalEquity, traderPayout, poolReturn);
+    }
+
+    /// @dev Fold a finished mandate into its trader's lifetime record.
+    ///
+    ///      Written here, at settlement, from values the contract just realised — not from a
+    ///      self-report and not from an off-chain indexer. That is what makes the record
+    ///      usable as collateral for a decision by someone who has never met the trader.
+    function _writeRecord(
+        Types.MandateState storage s,
+        Types.Terms memory terms,
+        uint256 finalEquity,
+        Types.Status finalStatus
+    ) internal {
+        Types.TraderRecord storage rec = _records[s.trader];
+        rec.mandatesSettled += 1;
+        rec.daysTraded += s.tradingDays;
+        rec.lastSettledAt = uint64(block.timestamp);
+
+        if (finalStatus == Types.Status.Breached) rec.breaches += 1;
+
+        if (finalEquity > terms.allocation) {
+            uint256 profit = finalEquity - terms.allocation;
+            rec.realisedProfit += profit;
+            rec.profitableExits += 1;
+
+            // Best consistency is the lowest score achieved on a profitable exit — a trader
+            // whose profit came from many days rather than one lucky session.
+            uint16 score =
+                uint16(RiskEngine.consistencyBps(s.largestDailyGain, finalEquity, terms.allocation));
+            if (score == 0) score = 1; // 0 is reserved for "no profitable exit yet"
+            if (rec.bestConsistencyBps == 0 || score < rec.bestConsistencyBps) {
+                rec.bestConsistencyBps = score;
+            }
+        } else {
+            rec.realisedLoss += terms.allocation - finalEquity;
+        }
+
+        emit TraderRecordUpdated(
+            s.trader,
+            rec.mandatesSettled,
+            rec.breaches,
+            rec.profitableExits,
+            rec.realisedProfit,
+            rec.bestConsistencyBps
+        );
     }
 
     function _removeActive(uint256 mandateId) internal {
@@ -509,7 +626,11 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     function aggregateActiveEquity() external view returns (uint256 total) {
         uint256 n = _activeMandates.length;
         for (uint256 i; i < n; ++i) {
-            total += _states[_activeMandates[i]].lastMarkedEquity;
+            Types.MandateState storage s = _states[_activeMandates[i]];
+            // Backed mandates are funded by an individual LP, not by the pool. Counting them
+            // in the pool's assets would inflate every LP's share price with capital that is
+            // not theirs and losses they never underwrote.
+            if (s.backer == address(0)) total += s.lastMarkedEquity;
         }
     }
 
@@ -524,6 +645,14 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     function headroom(uint256 mandateId) external view returns (uint256 absolute, uint256 bps) {
         (uint256 floor,) = floorOf(mandateId);
         return RiskEngine.distanceToFloor(MandateAccount(_states[mandateId].account).equity(), floor);
+    }
+
+    /// @notice A trader's lifetime record. The portable credential.
+    /// @dev Public and free to read. A trader's history is currently trapped inside whichever
+    ///      firm produced it — this is the same data, owned by the trader and readable by any
+    ///      counterparty deciding whether to back them.
+    function recordOf(address trader) external view returns (Types.TraderRecord memory) {
+        return _records[trader];
     }
 
     /// @notice Every mandate currently Active. The keeper's work list.

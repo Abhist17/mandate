@@ -9,6 +9,7 @@ import {MiniPerp} from "../../src/venue/MiniPerp.sol";
 import {MandateAccount} from "../../src/MandateAccount.sol";
 import {MandateRegistry} from "../../src/MandateRegistry.sol";
 import {CapitalPool} from "../../src/CapitalPool.sol";
+import {UnderwritingBook} from "../../src/UnderwritingBook.sol";
 import {Types} from "../../src/libraries/Types.sol";
 
 /// @notice Full-system fixture. Market parameters mirror Perpl's live Monad testnet config,
@@ -42,6 +43,7 @@ contract Fixture is Test {
     MandateAccount internal accountImpl;
     MandateRegistry internal registry;
     CapitalPool internal pool;
+    UnderwritingBook internal book;
 
     address internal owner = makeAddr("owner");
     address internal keeper = makeAddr("keeper");
@@ -62,6 +64,8 @@ contract Fixture is Test {
         accountImpl = new MandateAccount();
         registry = new MandateRegistry(owner, address(venue), address(accountImpl));
         pool = new CapitalPool(owner, address(asset), "Mandate Pool Share", "mAUSD");
+
+        book = new UnderwritingBook(address(registry), address(asset));
 
         registry.setPool(address(pool));
         pool.setRegistry(address(registry));

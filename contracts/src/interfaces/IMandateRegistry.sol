@@ -21,6 +21,14 @@ interface IMandateRegistry {
     /// @notice Issue a mandate. Permissioned — see {MandateRegistry-issue}.
     function issue(address trader, Types.Terms calldata terms) external returns (uint256 mandateId);
 
+    /// @notice Issue a mandate funded by the caller, settling to `backer`.
+    function issueBacked(address trader, Types.Terms calldata terms, address backer)
+        external
+        returns (uint256);
+
+    /// @notice A trader's lifetime record, written by settlement.
+    function recordOf(address trader) external view returns (Types.TraderRecord memory);
+
     /// @notice Adverse move, in bps of new notional, that a pre-trade check assumes.
     /// @dev A stated, configurable parameter rather than a constant buried in the account.
     function preTradeBufferBps() external view returns (uint16);
