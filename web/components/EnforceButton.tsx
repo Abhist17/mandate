@@ -1,9 +1,10 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, publicClient, explorerTx} from "@/lib/chain";
+import {ADDR, publicClient} from "@/lib/chain";
 import {registryAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
+import {useToast} from "@/components/Toast";
 import type {Mandate} from "@/lib/data";
 
 /**
@@ -19,8 +20,8 @@ import type {Mandate} from "@/lib/data";
  */
 export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () => void}) {
   const {address, client, wrongChain, connect, available} = useWallet();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ok: boolean; text: string; hash?: string}>();
 
   // Live equity is under the floor, but the mandate is still Active — so a mark right now
   // would end it. That is precisely the window this button exists for.
@@ -32,7 +33,11 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
   async function enforce() {
     if (!client || !address) return;
     setBusy(true);
-    setMsg(undefined);
+    const id = toast.push({
+      kind: "pending",
+      title: `Enforcing mandate #${mandate.id}`,
+      body: "Marking to market and flattening the position.",
+    });
     try {
       const hash = await client.writeContract({
         account: address,
@@ -42,13 +47,22 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
         functionName: "markAndEnforce",
         args: [mandate.id],
       });
+      toast.update(id, {body: "Waiting for confirmation…", hash});
       await publicClient.waitForTransactionReceipt({hash});
-      setMsg({ok: true, text: "Enforced. Position flattened, capital returned.", hash});
+      toast.update(id, {
+        kind: "success",
+        title: `Mandate #${mandate.id} enforced`,
+        body: "Position flattened and capital returned to whoever backed it — by you, from a wallet with no special role.",
+        hash,
+      });
       onDone();
     } catch (e) {
-      setMsg({
-        ok: false,
-        text: String(e).includes("denied") ? "Rejected in wallet." : "Enforcement failed.",
+      toast.update(id, {
+        kind: "error",
+        title: "Enforcement failed",
+        body: String(e).includes("denied")
+          ? "Rejected in wallet."
+          : String(e).split("\n")[0]?.slice(0, 140),
       });
     } finally {
       setBusy(false);
@@ -95,19 +109,6 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
         </button>
       )}
 
-      {msg && (
-        <div className={`mt-2 text-2xs ${msg.ok ? "text-up" : "text-down"}`}>
-          {msg.text}
-          {msg.hash && (
-            <>
-              {" · "}
-              <a className="underline" href={explorerTx(msg.hash)} target="_blank" rel="noreferrer">
-                tx
-              </a>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }

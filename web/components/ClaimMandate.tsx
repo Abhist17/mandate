@@ -1,7 +1,8 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, publicClient, explorerTx, hasDemoIssuer} from "@/lib/chain";
+import {ADDR, publicClient, hasDemoIssuer} from "@/lib/chain";
+import {useToast} from "@/components/Toast";
 import {demoIssuerAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {usePolled} from "@/lib/data";
@@ -48,9 +49,9 @@ const DRAWDOWN_MODE: Record<number, string> = {
  */
 export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => void}) {
   const {address, client, wrongChain, connect, available} = useWallet();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [preset, setPreset] = useState<number>(0);
-  const [msg, setMsg] = useState<{kind: "ok" | "err"; text: string; hash?: string}>();
 
   const {data, refresh} = usePolled(async () => {
     if (!hasDemoIssuer) return undefined;
@@ -101,24 +102,35 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
   async function claim() {
     if (!client || !address) return;
     setBusy(true);
-    setMsg(undefined);
+    const t = toast.push({
+      kind: "pending",
+      title: `Claiming a ${PRESETS[preset]!.name} mandate`,
+      body: "Confirm in your wallet.",
+    });
     try {
       const hash = await client.writeContract({
         account: address, chain: null,
         address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "claimPreset", args: [preset],
       });
+      toast.update(t, {body: "Waiting for confirmation…", hash});
       await publicClient.waitForTransactionReceipt({hash});
       const id = (await publicClient.readContract({
         address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "mandateOf", args: [address],
       })) as bigint;
-      setMsg({kind: "ok", text: `Mandate #${id} is yours`, hash});
+      toast.update(t, {
+        kind: "success",
+        title: `Mandate #${id} is yours`,
+        body: "Place a trade and watch your distance to floor.",
+        hash,
+      });
       refresh();
       onClaimed(id);
     } catch (e) {
       const s = String(e);
-      setMsg({
-        kind: "err",
-        text: s.includes("AlreadyClaimed")
+      toast.update(t, {
+        kind: "error",
+        title: "Claim failed",
+        body: s.includes("AlreadyClaimed")
           ? "This address already claimed a mandate."
           : s.includes("ClaimLimitReached")
             ? "All demo mandates have been claimed."
@@ -128,9 +140,9 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
                 ? "Rejected in wallet."
                 : s.includes("insufficient funds")
                   ? "Not enough MON for gas — grab some from the faucet."
-                  : // Anything else is worth showing verbatim rather than swallowing: a bare
-                    // "Claim failed" tells the user nothing and tells us nothing either.
-                    `Claim failed: ${s.split("\n")[0]?.slice(0, 140) ?? "unknown error"}`,
+                  : // Anything else verbatim rather than swallowed: a bare "failed" tells the
+                    // user nothing and tells us nothing either.
+                    (s.split("\n")[0]?.slice(0, 140) ?? "unknown error"),
       });
     } finally {
       setBusy(false);
@@ -223,19 +235,6 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
           </button>
         )}
 
-        {msg && (
-          <div className={`text-2xs ${msg.kind === "ok" ? "text-up" : "text-down"}`}>
-            {msg.text}
-            {msg.hash && (
-              <>
-                {" · "}
-                <a className="underline" href={explorerTx(msg.hash)} target="_blank" rel="noreferrer">
-                  tx
-                </a>
-              </>
-            )}
-          </div>
-        )}
 
         <p className="text-2xs leading-relaxed text-txt-lo">
           Terms are read from the contract, not from this page. What you see here is what gets

@@ -4,7 +4,8 @@ import {useState} from "react";
 import type {Address} from "viem";
 import {Panel, Stat, Field, Empty, Explainer, LiveDot} from "@/components/ui";
 import {OfferScatter, type OfferPoint} from "@/components/Charts";
-import {publicClient, ADDR, hasBook, isConfigured, explorerTx, shortAddrSafe} from "@/lib/chain";
+import {publicClient, ADDR, hasBook, isConfigured, shortAddrSafe} from "@/lib/chain";
+import {useToast} from "@/components/Toast";
 import {bookAbi, registryAbi, erc20Abi} from "@/lib/abi";
 import {useSession} from "@/lib/useSession";
 import {usePolled} from "@/lib/data";
@@ -340,30 +341,41 @@ function RecordCard({
 
 function OffersTable({offers, onClaimed}: {offers: Offer[]; onClaimed: () => void}) {
   const {address, client, wrongChain} = useSession();
+  const toast = useToast();
   const [busy, setBusy] = useState<bigint>();
-  const [msg, setMsg] = useState<{ok: boolean; text: string; hash?: string}>();
 
   async function claim(id: bigint) {
     if (!client || !address) return;
     setBusy(id);
-    setMsg(undefined);
+    const t = toast.push({kind: "pending", title: "Taking the offer", body: "Confirm in your wallet."});
     try {
       const hash = await client.writeContract({
         account: address, chain: null,
         address: ADDR.book, abi: bookAbi, functionName: "claim", args: [id],
       });
+      toast.update(t, {body: "Waiting for confirmation…", hash});
       await publicClient.waitForTransactionReceipt({hash});
-      setMsg({ok: true, text: "Mandate issued. It's yours to trade.", hash});
+      toast.update(t, {
+        kind: "success",
+        title: "You're funded",
+        body: "The mandate is yours. Head to the Trader tab to place your first trade.",
+        hash,
+      });
       onClaimed();
     } catch (e) {
       const s = String(e);
-      setMsg({
-        ok: false,
-        text: s.includes("RecordDoesNotQualify")
-          ? "Your record doesn't meet this offer."
-          : s.includes("denied")
-            ? "Rejected in wallet."
-            : "Claim failed.",
+      toast.update(t, {
+        kind: "error",
+        title: "Could not take the offer",
+        body: s.includes("RecordDoesNotQualify")
+          ? "Your record doesn't meet this offer yet."
+          : s.includes("AlreadyClaimed")
+            ? "You've already taken this one."
+            : s.includes("denied") || s.includes("User rejected")
+              ? "Rejected in wallet."
+              : s.includes("insufficient funds")
+                ? "Not enough MON for gas — grab some from the faucet."
+                : s.split("\n")[0]?.slice(0, 140),
       });
     } finally {
       setBusy(undefined);
@@ -443,19 +455,6 @@ function OffersTable({offers, onClaimed}: {offers: Offer[]; onClaimed: () => voi
         </div>
       )}
 
-      {msg && (
-        <div className={`border-t border-edge px-4 py-2.5 text-2xs ${msg.ok ? "text-up" : "text-down"}`}>
-          {msg.text}
-          {msg.hash && (
-            <>
-              {" · "}
-              <a className="underline" href={explorerTx(msg.hash)} target="_blank" rel="noreferrer">
-                tx
-              </a>
-            </>
-          )}
-        </div>
-      )}
     </Panel>
   );
 }

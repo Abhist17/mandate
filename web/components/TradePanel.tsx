@@ -1,9 +1,10 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, MARKETS, publicClient, explorerTx} from "@/lib/chain";
+import {ADDR, MARKETS, publicClient} from "@/lib/chain";
 import {accountAbi, venueExtraAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
+import {useToast} from "@/components/Toast";
 import {fmtPrice, fmtUsd} from "@/lib/format";
 import type {Mandate} from "@/lib/data";
 
@@ -16,11 +17,11 @@ import type {Mandate} from "@/lib/data";
  */
 export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => void}) {
   const {address, client, wrongChain} = useWallet();
+  const toast = useToast();
   const [marketId, setMarketId] = useState<number>(MARKETS[0].id);
   const [size, setSize] = useState("1");
   const [quote, setQuote] = useState<{buy: bigint; sell: bigint} | undefined>();
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{kind: "ok" | "err"; text: string; hash?: string}>();
 
   const isTrader = address?.toLowerCase() === mandate.state.trader.toLowerCase();
   const active = mandate.state.status === 1;
@@ -51,7 +52,12 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
   async function submit(isLong: boolean) {
     if (!client || !address || sizeWei === 0n) return;
     setBusy(true);
-    setMsg(undefined);
+    const sym = MARKETS.find((m) => m.id === marketId)?.symbol ?? "";
+    const t = toast.push({
+      kind: "pending",
+      title: `${isLong ? "Long" : "Short"} ${size} ${sym}`,
+      body: "The contract checks this against your position cap before it fills.",
+    });
     try {
       const hash = await client.writeContract({
         account: address,
@@ -61,11 +67,17 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
         functionName: "openPosition",
         args: [marketId, isLong, sizeWei, 0n],
       });
+      toast.update(t, {body: "Waiting for confirmation…", hash});
       await publicClient.waitForTransactionReceipt({hash});
-      setMsg({kind: "ok", text: `${isLong ? "Long" : "Short"} filled`, hash});
+      toast.update(t, {
+        kind: "success",
+        title: `${isLong ? "Long" : "Short"} ${size} ${sym} filled`,
+        body: "Watch your distance to floor — it updates every block.",
+        hash,
+      });
       onDone();
     } catch (e) {
-      setMsg({kind: "err", text: decodeError(e)});
+      toast.update(t, {kind: "error", title: "Order rejected", body: decodeError(e)});
     } finally {
       setBusy(false);
     }
@@ -74,7 +86,7 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
   async function close(id: number) {
     if (!client || !address) return;
     setBusy(true);
-    setMsg(undefined);
+    const t = toast.push({kind: "pending", title: "Closing position", body: "Confirm in your wallet."});
     try {
       const hash = await client.writeContract({
         account: address,
@@ -84,11 +96,12 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
         functionName: "closePosition",
         args: [id, 0n],
       });
+      toast.update(t, {body: "Waiting for confirmation…", hash});
       await publicClient.waitForTransactionReceipt({hash});
-      setMsg({kind: "ok", text: "Position closed", hash});
+      toast.update(t, {kind: "success", title: "Position closed", hash});
       onDone();
     } catch (e) {
-      setMsg({kind: "err", text: decodeError(e)});
+      toast.update(t, {kind: "error", title: "Could not close", body: decodeError(e)});
     } finally {
       setBusy(false);
     }
@@ -194,24 +207,6 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
         </div>
       )}
 
-      {msg && (
-        <div className={`text-2xs ${msg.kind === "ok" ? "text-up" : "text-down"}`}>
-          {msg.text}
-          {msg.hash && (
-            <>
-              {" · "}
-              <a
-                className="underline hover:text-txt-hi"
-                href={explorerTx(msg.hash)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                tx
-              </a>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {fetchMandate, fetchPoolStats, usePolled, type Mandate} from "@/lib/data"
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
 import {registryAbi, poolExtraAbi, erc20Abi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
+import {useToast} from "@/components/Toast";
 import {fmtUsd, fmtBps, fmtSigned, shortAddr, timeAgo, fmtPct} from "@/lib/format";
 import {Signed} from "@/components/ui";
 
@@ -304,9 +305,9 @@ type LpPosition = {
 
 function LpActions({position, onDone}: {position: LpPosition; onDone: () => void}) {
   const {address, client, wrongChain} = useWallet();
+  const toast = useToast();
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string>();
 
   const units = (() => {
     const n = Number(amount);
@@ -316,14 +317,24 @@ function LpActions({position, onDone}: {position: LpPosition; onDone: () => void
   async function run(label: string, fn: () => Promise<`0x${string}`>) {
     if (!client || !address) return;
     setBusy(true);
-    setMsg(undefined);
+    const t = toast.push({kind: "pending", title: label, body: "Confirm in your wallet."});
     try {
       const hash = await fn();
+      toast.update(t, {body: "Waiting for confirmation…", hash});
       await publicClient.waitForTransactionReceipt({hash});
-      setMsg(`${label} confirmed`);
+      toast.update(t, {kind: "success", title: `${label} confirmed`, hash});
       onDone();
     } catch (e) {
-      setMsg(String(e).includes("denied") ? "Rejected in wallet." : `${label} failed.`);
+      const s = String(e);
+      toast.update(t, {
+        kind: "error",
+        title: `${label} failed`,
+        body: s.includes("denied") || s.includes("User rejected")
+          ? "Rejected in wallet."
+          : s.includes("InsufficientIdleCapital")
+            ? "Not enough idle capital — allocated capital is locked until a mandate settles."
+            : s.split("\n")[0]?.slice(0, 140),
+      });
     } finally {
       setBusy(false);
     }
@@ -439,7 +450,6 @@ function LpActions({position, onDone}: {position: LpPosition; onDone: () => void
           </button>
         )}
 
-        {msg && <div className="text-2xs text-txt-mid">{msg}</div>}
       </div>
     </Panel>
   );
