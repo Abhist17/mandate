@@ -90,6 +90,20 @@ jobs:
           node ../scripts/smoke-web.mjs http://127.0.0.1:3111
         continue-on-error: true
 
+      # Auth is the one place where "it works for an honest user" proves least. Every case
+      # here is a way sign-in could be broken while still letting a real wallet in — and one
+      # of them (nonce replay) was in fact broken when this was written.
+      - name: Auth flow and replay/forgery refusals
+        working-directory: web
+        env:
+          AUTH_SECRET: ci-only-secret-not-used-anywhere-else-000000
+          NEXT_PUBLIC_CHAIN_ID: "10143"
+        run: |
+          npx next start -p 3112 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3112/ >/dev/null && break; sleep 1; done
+          npx tsx ../scripts/auth-check.mts http://127.0.0.1:3112
+        continue-on-error: true
+
   integrations:
     name: Live integration checks
     runs-on: ubuntu-latest

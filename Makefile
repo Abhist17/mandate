@@ -68,6 +68,9 @@ spike: ## Re-verify the Phase 1 claims against live Perpl and Pyth endpoints
 smoke: ## Render the app in a real browser and fail on any console error
 	node scripts/smoke-web.mjs
 
+auth-check: ## Exercise the sign-in flow and every replay/forgery path it must refuse
+	npx tsx scripts/auth-check.mts
+
 verify: build test typecheck web-build ## Everything CI runs, locally
 	@echo "\033[32mAll checks passed.\033[0m"
 

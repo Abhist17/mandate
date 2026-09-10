@@ -10,7 +10,7 @@ import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer} 
 import {fetchActiveIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
-import {useWallet} from "@/lib/useWallet";
+import {useSession} from "@/lib/useSession";
 import {registryAbi} from "@/lib/abi";
 import {
   fmtUsd, fmtSigned, fmtBps, fmtPct, toNum, shortAddr, fmtCountdown, timeAgo, fmtSize, fmtPrice,
@@ -47,16 +47,28 @@ export default function TraderPage() {
     return settled.filter((m): m is Mandate => m !== undefined);
   }, 2_500, [allIds?.all.length]);
 
-  // Default to the mandate closest to its floor — the one that needs watching.
+  const {address: sessionAddress} = useSession();
+
+  // Open on YOUR mandate if you have one; otherwise on whichever is closest to its floor,
+  // because that is the one worth watching.
   useEffect(() => {
     if (selected !== undefined || !mandates || mandates.length === 0) return;
     const active = mandates.filter((m) => m.state.status === 1);
+
+    const mine = sessionAddress
+      ? active.find((m) => m.state.trader.toLowerCase() === sessionAddress.toLowerCase())
+      : undefined;
+    if (mine) {
+      setSelected(mine.id);
+      return;
+    }
+
     const pick =
       active.length > 0
         ? active.reduce((a, b) => (a.headroomBps <= b.headroomBps ? a : b))
         : mandates[0]!;
     setSelected(pick.id);
-  }, [mandates, selected]);
+  }, [mandates, selected, sessionAddress]);
 
   const mandate = useMemo(
     () => mandates?.find((m) => m.id === selected),
@@ -134,7 +146,7 @@ function ClaimBanner({
   mandates: Mandate[];
   onClaimed: (id: bigint) => void;
 }) {
-  const {address} = useWallet();
+  const {address} = useSession();
   const [dismissed, setDismissed] = useState(false);
   if (!address || dismissed) return null;
 
@@ -208,6 +220,7 @@ function MandateStrip({
   selected: bigint | undefined;
   onSelect: (id: bigint) => void;
 }) {
+  const {address} = useSession();
   return (
     <div className="flex gap-2 overflow-x-auto pb-1">
       {mandates.map((m) => {
@@ -227,8 +240,13 @@ function MandateStrip({
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-2xs tracking-[0.1em] text-txt-lo">
+              <span className="flex items-center gap-1.5 text-2xs tracking-[0.1em] text-txt-lo">
                 MANDATE #{m.id.toString()}
+                {address && m.state.trader.toLowerCase() === address.toLowerCase() && (
+                  <span className="rounded bg-white/[0.07] px-1 py-px text-[0.6rem] text-txt-mid">
+                    YOURS
+                  </span>
+                )}
               </span>
               {enforceable ? (
                 <span className="rounded-md border border-down/40 bg-down/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-down">

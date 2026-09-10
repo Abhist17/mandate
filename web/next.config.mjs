@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   env: {
+    AUTH_SECRET: process.env.AUTH_SECRET,
     NEXT_PUBLIC_MONAD_RPC: process.env.NEXT_PUBLIC_MONAD_RPC ?? process.env.MONAD_TESTNET_RPC,
     NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID ?? process.env.MONAD_TESTNET_CHAIN_ID,
     NEXT_PUBLIC_REGISTRY: process.env.MANDATE_REGISTRY_ADDRESS,

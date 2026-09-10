@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import {usePathname} from "next/navigation";
-import {useWallet} from "@/lib/useWallet";
-import {shortAddr} from "@/lib/format";
+import {AuthButton} from "@/components/AuthButton";
 import {CHAIN_ID} from "@/lib/chain";
 
 export function Nav() {
   const path = usePathname();
-  const {address, wrongChain, available, connecting, connect, switchChain} = useWallet();
 
   const tabs = [
     {href: "/", label: "Trader"},
@@ -43,25 +41,9 @@ export function Nav() {
           })}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          {wrongChain && (
-            <button onClick={() => void switchChain()} className="btn btn-down">
-              Switch to Monad testnet
-            </button>
-          )}
-          {!available ? (
-            <span className="text-2xs text-txt-lo">No wallet detected</span>
-          ) : address ? (
-            <span className="num flex items-center gap-2 rounded-lg border border-edge bg-ink-900 px-3 py-1.5 text-xs text-txt-mid">
-              <span className="h-1.5 w-1.5 rounded-full bg-up" />
-              {shortAddr(address)}
-            </span>
-          ) : (
-            <button onClick={() => void connect()} disabled={connecting} className="btn">
-              {connecting ? "Connecting…" : "Connect wallet"}
-            </button>
-          )}
-          <span className="hidden text-2xs text-txt-lo md:inline">chain {CHAIN_ID}</span>
+        <div className="ml-auto flex items-center gap-3">
+          <AuthButton />
+          <span className="hidden text-2xs text-txt-lo lg:inline">chain {CHAIN_ID}</span>
         </div>
       </div>
     </nav>

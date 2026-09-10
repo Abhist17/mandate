@@ -173,7 +173,8 @@ LP deposits ──► CapitalPool ──► allocates ──► MandateAccount (
 
 ## Try it (testnet, free, no signup)
 
-1. Open the app and connect a wallet on Monad testnet
+1. Open the app and **sign in** — connect a wallet, then sign a message. It's a signature,
+   not a transaction: it costs nothing and moves no funds
 2. Click **Claim a mandate** — you get $100k of testnet capital under enforced terms
 3. Trade it. Watch the distance-to-floor readout move against you
 4. Breach the 10% trailing drawdown or the 5% daily limit and the contract flattens your
@@ -265,6 +266,7 @@ interval) and marks against Perpl's own oracle. Full reasoning in
 
 ```bash
 make test        # 250 tests
+make auth-check  # sign-in flow + every replay and forgery path it must refuse
 make coverage    # RiskEngine 99%, MandateRegistry 100%, 95%+ across src/
 make smoke       # renders both pages in a real browser, fails on any console error
 ```

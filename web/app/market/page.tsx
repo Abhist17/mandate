@@ -5,7 +5,7 @@ import type {Address} from "viem";
 import {Panel, Stat, Field, Empty, Explainer, LiveDot} from "@/components/ui";
 import {publicClient, ADDR, hasBook, isConfigured, explorerTx, shortAddrSafe} from "@/lib/chain";
 import {bookAbi, registryAbi, erc20Abi} from "@/lib/abi";
-import {useWallet} from "@/lib/useWallet";
+import {useSession} from "@/lib/useSession";
 import {usePolled} from "@/lib/data";
 import {fmtUsd, fmtBps, fmtPct, shortAddr} from "@/lib/format";
 
@@ -60,7 +60,8 @@ const DRAWDOWN_MODE: Record<number, string> = {0: "static", 1: "trailing", 2: "t
 const NO_LIMIT = 4_294_967_295;
 
 export default function MarketPage() {
-  const {address} = useWallet();
+  // The signed-in address, not merely a connected one — so a reload lands on your record.
+  const {address, signedIn, signIn, signingIn} = useSession();
 
   const {data, refresh} = usePolled(async () => {
     if (!hasBook) return undefined;
@@ -81,7 +82,7 @@ export default function MarketPage() {
           criteria: Offer["criteria"];
         };
         let qualifies = false;
-        let reason = "Connect a wallet to check";
+        let reason = "Sign in to check";
         if (address) {
           const q = (await publicClient.readContract({
             address: ADDR.book, abi: bookAbi, functionName: "qualifies", args: [id, address],
@@ -144,7 +145,14 @@ export default function MarketPage() {
       </Explainer>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_1fr]">
-        <RecordCard record={data?.record} address={address} best={best} />
+        <RecordCard
+          record={data?.record}
+          address={address}
+          signedIn={signedIn}
+          onSignIn={signIn}
+          signingIn={signingIn}
+          best={best}
+        />
         <OffersTable offers={offers} onClaimed={refresh} />
       </div>
     </div>
@@ -154,16 +162,31 @@ export default function MarketPage() {
 function RecordCard({
   record,
   address,
+  signedIn,
+  onSignIn,
+  signingIn,
   best,
 }: {
   record: TraderRecord | undefined;
   address: Address | undefined;
+  signedIn: boolean;
+  onSignIn: () => void;
+  signingIn: boolean;
   best: Offer | undefined;
 }) {
-  if (!address) {
+  if (!address || !signedIn) {
     return (
       <Panel title="Your record">
-        <Empty>Connect a wallet to see your track record.</Empty>
+        <div className="space-y-3 p-5 text-center">
+          <p className="text-sm text-txt-mid">Sign in to see your track record.</p>
+          <p className="text-2xs leading-relaxed text-txt-lo">
+            A signature, not a transaction. It proves you control the address so the app can
+            show your mandates and the offers you qualify for.
+          </p>
+          <button onClick={onSignIn} disabled={signingIn} className="btn btn-up w-full">
+            {signingIn ? "Check your wallet…" : address ? "Sign in" : "Connect and sign in"}
+          </button>
+        </div>
       </Panel>
     );
   }
@@ -242,7 +265,7 @@ function RecordCard({
 }
 
 function OffersTable({offers, onClaimed}: {offers: Offer[]; onClaimed: () => void}) {
-  const {address, client, wrongChain} = useWallet();
+  const {address, client, wrongChain} = useSession();
   const [busy, setBusy] = useState<bigint>();
   const [msg, setMsg] = useState<{ok: boolean; text: string; hash?: string}>();
 
