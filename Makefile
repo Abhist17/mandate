@@ -37,9 +37,19 @@ fmt: ## Format Solidity
 snapshot: ## Gas snapshot
 	cd contracts && forge snapshot
 
-deploy-testnet: ## Deploy the full system to Monad testnet
+deploy-testnet: ## Deploy to whatever MONAD_TESTNET_RPC points at (local fork or live)
 	cd contracts && forge script script/Deploy.s.sol:Deploy \
 		--rpc-url $$MONAD_TESTNET_RPC --broadcast --legacy -vvv
+
+# Deliberately ignores MONAD_TESTNET_RPC and targets the public network explicitly.
+# A local anvil fork reports the SAME chain id as Monad testnet (10143), so "which network
+# am I on" cannot be answered from the chain id alone — it has to be stated.
+deploy-live: ## Deploy to the PUBLIC Monad testnet (needs a funded PRIVATE_KEY in .env)
+	@grep -q '^PRIVATE_KEY=0xac0974bec' .env && \
+		{ echo "PRIVATE_KEY in .env is still the anvil test key. Set your own funded key first."; exit 1; } || true
+	cd contracts && MONAD_TESTNET_RPC=https://testnet-rpc.monad.xyz POOL_ASSET_ADDRESS= \
+		forge script script/Deploy.s.sol:Deploy \
+		--rpc-url https://testnet-rpc.monad.xyz --broadcast --legacy -vvv
 
 keeper: ## Run the risk keeper against the deployed contracts
 	npm run keeper

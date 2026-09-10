@@ -221,6 +221,28 @@ Ids and parameters mirror Perpl's live Monad testnet configuration:
 | ETH | 32 | 12% | 6% | 0.069% | 2580s |
 | SOL | 48 | 10% | 5% | 0.069% | 2580s |
 
+## ⚠️ A local fork shares Monad testnet's chain id
+
+`anvil --fork-url https://testnet-rpc.monad.xyz` reports **chain id 10143 — the same as the
+real network**. A wallet cannot tell the two apart, so "you're on the right network" checks
+pass while transactions go to whichever one the wallet is actually pointed at.
+
+The failure is quiet and it costs the user money: a call to an address that has no code on
+that network **succeeds**, burns ~21k gas, and does nothing. The app then shows a bare
+failure with no explanation.
+
+Two defences, both in place:
+
+- `NetworkGuard` in the app checks for *code at the registry address* rather than trusting the
+  chain id, and blocks the UI with an explanation if it isn't there.
+- Run a local fork on its own chain id when testing with a real wallet:
+
+  ```bash
+  anvil --fork-url https://testnet-rpc.monad.xyz --chain-id 31337 --port 8546
+  ```
+
+  Then add that as a custom network in the wallet. The wallet can now tell them apart.
+
 ## Troubleshooting
 
 **`StalePrice`** — the oracle feed is older than 60s. Start the keeper, or push manually:
@@ -245,3 +267,12 @@ has no order book and so no natural counterparty; top it up with
 
 **`AllocationCapExceeded`** — the requested allocation exceeds 20% of pool assets. Deposit
 more, or issue a smaller mandate.
+
+**A transaction "succeeds" but nothing happens** — you are almost certainly pointed at a
+different network from the one the contracts are on. See the chain-id note above. Check with:
+
+```bash
+cast code $MANDATE_REGISTRY_ADDRESS --rpc-url <the rpc your wallet uses>
+```
+
+An empty `0x` means there is no contract there.

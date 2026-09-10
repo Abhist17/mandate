@@ -157,14 +157,18 @@ function ClaimBanner({
   );
   if (owns) return null;
 
+  // The dismiss control sits ABOVE the panel, not on top of it: absolutely positioning it in
+  // the corner put it straight through the panel header's own right-hand slot.
   return (
-    <div className="relative mx-auto max-w-lg">
-      <button
-        onClick={() => setDismissed(true)}
-        className="absolute right-2 top-2 z-10 px-2 py-1 text-2xs text-txt-lo hover:text-txt-hi"
-      >
-        dismiss
-      </button>
+    <div className="mx-auto max-w-lg space-y-1.5">
+      <div className="flex justify-end">
+        <button
+          onClick={() => setDismissed(true)}
+          className="px-1 text-2xs text-txt-lo transition-colors hover:text-txt-hi"
+        >
+          dismiss
+        </button>
+      </div>
       <ClaimMandate onClaimed={onClaimed} />
     </div>
   );

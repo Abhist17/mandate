@@ -122,9 +122,15 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
           ? "This address already claimed a mandate."
           : s.includes("ClaimLimitReached")
             ? "All demo mandates have been claimed."
-            : s.includes("denied")
-              ? "Rejected in wallet."
-              : "Claim failed.",
+            : s.includes("ClaimsClosed")
+              ? "Claims are closed on this deployment."
+              : s.includes("denied") || s.includes("User rejected")
+                ? "Rejected in wallet."
+                : s.includes("insufficient funds")
+                  ? "Not enough MON for gas — grab some from the faucet."
+                  : // Anything else is worth showing verbatim rather than swallowing: a bare
+                    // "Claim failed" tells the user nothing and tells us nothing either.
+                    `Claim failed: ${s.split("\n")[0]?.slice(0, 140) ?? "unknown error"}`,
       });
     } finally {
       setBusy(false);
