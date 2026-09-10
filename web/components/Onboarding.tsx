@@ -140,8 +140,8 @@ export function Onboarding({mandates}: {mandates: Mandate[]}) {
           return (
             <li
               key={s.n}
-              className={`flex gap-4 px-5 py-3.5 transition-colors ${
-                isCurrent ? "bg-white/[0.02]" : ""
+              className={`flex gap-4 px-5 transition-colors ${
+                isCurrent ? "bg-white/[0.02] py-3.5" : "py-2.5"
               }`}
             >
               <div
@@ -159,12 +159,19 @@ export function Onboarding({mandates}: {mandates: Mandate[]}) {
               <div className="min-w-0 flex-1">
                 <div
                   className={`text-xs font-medium ${
-                    s.done ? "text-txt-mid line-through decoration-txt-lo/50" : "text-txt-hi"
+                    s.done
+                      ? "text-txt-mid line-through decoration-txt-lo/50"
+                      : isCurrent
+                        ? "text-txt-hi"
+                        : "text-txt-mid"
                   }`}
                 >
                   {s.title}
                 </div>
-                {!s.done && (
+                {/* Only the step you are on explains itself. Showing all five at once buried
+                    the rest of the page below the fold and gave a reader five things to
+                    read when they need one. */}
+                {isCurrent && (
                   <p className="mt-1 text-2xs leading-relaxed text-txt-mid">{s.body}</p>
                 )}
               </div>

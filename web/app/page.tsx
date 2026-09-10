@@ -245,7 +245,10 @@ function MandateStrip({
 }) {
   const {address} = useSession();
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
+    // Fades at the right edge so a row that continues past the viewport looks scrollable
+    // rather than truncated.
+    <div className="relative">
+      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
       {mandates.map((m) => {
         const active = m.state.status === 1;
         const bps = Number(m.headroomBps);
@@ -296,6 +299,8 @@ function MandateStrip({
           </button>
         );
       })}
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-ink-980 to-transparent" />
     </div>
   );
 }
