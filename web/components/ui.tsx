@@ -167,3 +167,55 @@ export function LiveDot({on = true}: {on?: boolean}) {
 export function Empty({children}: {children: ReactNode}) {
   return <div className="px-4 py-10 text-center text-sm text-txt-lo">{children}</div>;
 }
+
+/**
+ * Loading placeholder shaped like the content it replaces.
+ *
+ * A skeleton that matches the eventual layout means the page does not jump when data lands.
+ * "Loading…" as bare text is both less informative and more disruptive.
+ */
+export function Skeleton({className = ""}: {className?: string}) {
+  return <div className={`animate-pulse rounded bg-white/[0.045] ${className}`} />;
+}
+
+export function SkeletonPanel({rows = 3, title}: {rows?: number; title?: string}) {
+  return (
+    <Panel title={title}>
+      <div className="space-y-3 p-4">
+        {Array.from({length: rows}).map((_, i) => (
+          <div key={i} className="flex items-center justify-between gap-4">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * A signed value with a direction marker, not just a colour.
+ *
+ * Financial UIs universally use green for gain and red for loss, and breaking that convention
+ * breaks trust — but colour alone excludes anyone with red-green colour blindness, which is
+ * roughly one man in twelve. The arrow carries the same information without it.
+ */
+export function Signed({
+  value,
+  format,
+  className = "",
+}: {
+  value: bigint;
+  format: (v: bigint) => string;
+  className?: string;
+}) {
+  const up = value >= 0n;
+  const magnitude = up ? value : -value;
+  return (
+    <span className={`num ${up ? "text-up" : "text-down"} ${className}`}>
+      <span aria-hidden="true">{up ? "▲" : "▼"}</span>
+      <span className="sr-only">{up ? "up" : "down"} </span>
+      {format(magnitude)}
+    </span>
+  );
+}

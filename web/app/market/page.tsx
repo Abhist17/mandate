@@ -60,6 +60,9 @@ type Offer = {
 const DRAWDOWN_MODE: Record<number, string> = {0: "static", 1: "trailing", 2: "trailing to b/e"};
 const NO_LIMIT = 4_294_967_295;
 
+/** An address with no history — what a first-time visitor is. */
+const ZERO_TRADER = "0x0000000000000000000000000000000000000001" as Address;
+
 export default function MarketPage() {
   // The signed-in address, not merely a connected one — so a reload lands on your record.
   const {address, signedIn, signIn, signingIn} = useSession();
@@ -82,15 +85,20 @@ export default function MarketPage() {
           };
           criteria: Offer["criteria"];
         };
-        let qualifies = false;
-        let reason = "Sign in to check";
-        if (address) {
-          const q = (await publicClient.readContract({
-            address: ADDR.book, abi: bookAbi, functionName: "qualifies", args: [id, address],
-          })) as readonly [boolean, string];
-          qualifies = q[0];
-          reason = q[1];
-        }
+        // Check against the visitor's own address when we have one, and against a fresh
+        // address when we do not.
+        //
+        // Refusing to say anything until someone signs in is the friction that loses them:
+        // a visitor cannot tell whether the product is for them without connecting, so they
+        // do not connect. A brand-new address is the honest default — it is what most
+        // visitors actually are — and the answer it gives ("open to anyone" is claimable,
+        // the rest need a record) is exactly the shape of the market.
+        const subject = address ?? ZERO_TRADER;
+        const q = (await publicClient.readContract({
+          address: ADDR.book, abi: bookAbi, functionName: "qualifies", args: [id, subject],
+        })) as readonly [boolean, string];
+        const qualifies = q[0];
+        const reason = q[1];
         return {
           id, lp: o.lp, allocation: o.allocation,
           slotsTotal: Number(o.slotsTotal), slotsTaken: Number(o.slotsTaken),
@@ -209,16 +217,48 @@ function RecordCard({
   best: Offer | undefined;
 }) {
   if (!address || !signedIn) {
+    // Explain what a record is and what it buys BEFORE asking for a wallet. A visitor who
+    // cannot tell what the thing does has no reason to connect, and asking first is how you
+    // lose them at the door.
     return (
-      <Panel title="Your record">
-        <div className="space-y-3 p-5 text-center">
-          <p className="text-sm text-txt-mid">Sign in to see your track record.</p>
-          <p className="text-2xs leading-relaxed text-txt-lo">
-            A signature, not a transaction. It proves you control the address so the app can
-            show your mandates and the offers you qualify for.
+      <Panel title="What a record gets you">
+        <div className="space-y-4 p-4">
+          <p className="text-xs leading-relaxed text-txt-mid">
+            Every mandate you finish is written into a public record by the contract that
+            enforced it — settled, breached, profitable exits, best consistency. It is not a
+            claim you make or a reference a firm gives you.
           </p>
+
+          <div className="space-y-2">
+            {[
+              {r: "Start here", t: "$25,000 at 70%", note: "no record needed"},
+              {r: "1 clean mandate", t: "$50,000 at 80%", note: "settled, no breach"},
+              {r: "2 settled", t: "$100,000 at 90%", note: "one in profit"},
+              {r: "3 settled", t: "$250,000 at 92%", note: "consistent, no breaches"},
+            ].map((row, i) => (
+              <div
+                key={row.r}
+                className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-ink-950/60 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-2xs text-txt-lo">{row.r}</div>
+                  <div className="text-2xs text-txt-lo">{row.note}</div>
+                </div>
+                <div
+                  className={`num shrink-0 text-xs ${i === 0 ? "text-up" : "text-txt-mid"}`}
+                >
+                  {row.t}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-2xs leading-relaxed text-txt-lo">
+            Your record travels with you. At a prop firm it stays behind when you leave.
+          </p>
+
           <button onClick={onSignIn} disabled={signingIn} className="btn btn-up w-full">
-            {signingIn ? "Check your wallet…" : address ? "Sign in" : "Connect and sign in"}
+            {signingIn ? "Check your wallet…" : address ? "Sign in to see yours" : "Connect and sign in"}
           </button>
         </div>
       </Panel>
@@ -333,7 +373,11 @@ function OffersTable({offers, onClaimed}: {offers: Offer[]; onClaimed: () => voi
   return (
     <Panel
       title={`Open offers (${offers.length})`}
-      right={<span className="text-2xs text-txt-lo">sorted by split</span>}
+      right={
+        <span className="text-2xs text-txt-lo">
+          {address ? "checked against your record" : "shown for a new trader"}
+        </span>
+      }
     >
       {offers.length === 0 ? (
         <Empty>

@@ -16,10 +16,10 @@ export function Nav() {
 
   return (
     <nav className="sticky top-0 z-40 border-b border-edge bg-ink-980/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[1500px] items-center gap-6 px-4 py-3">
+      <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-3 py-2.5 sm:gap-6 sm:px-4 sm:py-3">
         <Link href="/" className="flex items-baseline gap-2.5 transition-opacity hover:opacity-80">
           <span className="text-sm font-semibold tracking-[0.08em] text-txt-hi">MANDATE</span>
-          <span className="hidden text-2xs text-txt-lo sm:inline">the rules are the contract</span>
+          <span className="hidden text-2xs text-txt-lo lg:inline">the rules are the contract</span>
         </Link>
 
         <div className="flex gap-1">
@@ -29,7 +29,7 @@ export function Nav() {
               <Link
                 key={t.href}
                 href={t.href}
-                className={`rounded-lg px-3 py-1.5 text-xs transition-all duration-150 ${
+                className={`rounded-lg px-2.5 py-1.5 text-xs transition-all duration-150 sm:px-3 ${
                   active
                     ? "bg-ink-800 text-txt-hi shadow-panel"
                     : "text-txt-mid hover:bg-white/[0.03] hover:text-txt-hi"

@@ -7,7 +7,7 @@ import {ClaimMandate} from "@/components/ClaimMandate";
 import {PayoutPanel} from "@/components/PayoutPanel";
 import {EnforceButton} from "@/components/EnforceButton";
 import {Onboarding} from "@/components/Onboarding";
-import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer} from "@/components/ui";
+import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer, Skeleton} from "@/components/ui";
 import {fetchActiveIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
@@ -101,7 +101,24 @@ export default function TraderPage() {
   if (!isConfigured) return <NotConfigured />;
 
   if (!mandates) {
-    return <div className="py-24 text-center text-sm text-txt-lo">Loading mandates…</div>;
+    // Shaped like the real layout so nothing jumps when the data lands.
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <div className="flex gap-2 overflow-hidden">
+          {Array.from({length: 4}).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-[205px] shrink-0 rounded-xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
+          <div className="space-y-4">
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-[380px] w-full rounded-xl" />
+          </div>
+          <Skeleton className="hidden h-[420px] w-full rounded-xl xl:block" />
+        </div>
+      </div>
+    );
   }
 
   if (mandates.length === 0) {
@@ -198,7 +215,7 @@ function Hero() {
             anyone can call it.
           </p>
         </div>
-        <div className="flex shrink-0 gap-2.5">
+        <div className="flex shrink-0 flex-wrap gap-2.5">
           <HeroStat k="Every block" v="marked" />
           <HeroStat k="Enforcement" v="permissionless" />
           <HeroStat k="Payout" v="automatic" />

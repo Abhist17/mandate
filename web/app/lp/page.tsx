@@ -8,6 +8,7 @@ import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib
 import {registryAbi, poolExtraAbi, erc20Abi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {fmtUsd, fmtBps, fmtSigned, shortAddr, timeAgo, fmtPct} from "@/lib/format";
+import {Signed} from "@/components/ui";
 
 /**
  * LP view.
@@ -114,7 +115,39 @@ export default function LpPage() {
             {active.length === 0 ? (
               <Empty>No live mandates.</Empty>
             ) : (
-              <table className="w-full text-xs">
+              <>
+              {/* Under md a wide table either scrolls horizontally or shrinks below legibility.
+                  Cards keep every field readable on a phone, which is where a Discord link
+                  gets opened. */}
+              <div className="divide-y divide-edge md:hidden">
+                {[...active]
+                  .sort((a, b) => Number(a.headroomBps) - Number(b.headroomBps))
+                  .map((m) => {
+                    const pnl = m.liveEquity - m.terms.allocation;
+                    const bps = Number(m.headroomBps);
+                    const tone = bps < 150 ? "text-down" : bps < 350 ? "text-warn" : "text-up";
+                    return (
+                      <div key={m.id.toString()} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="num text-sm text-txt-hi">#{m.id.toString()}</span>
+                          <span className={`num text-sm ${tone}`}>
+                            {fmtUsd(m.headroom)} to floor
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-2xs">
+                          <Field label="Trader" value={shortAddr(m.state.trader)} />
+                          <Field label="Equity" value={fmtUsd(m.liveEquity)} />
+                          <Field label="Allocation" value={fmtUsd(m.terms.allocation)} />
+                          <Field
+                            label="P&L"
+                            value={<Signed value={pnl} format={(v) => fmtUsd(v)} />}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              <table className="hidden w-full text-xs md:table">
                 <thead>
                   <tr className="border-b border-edge text-2xs uppercase tracking-wider text-txt-lo">
                     <th className="px-4 py-2 text-left font-medium">Mandate</th>
@@ -169,6 +202,7 @@ export default function LpPage() {
                     })}
                 </tbody>
               </table>
+              </>
             )}
           </Panel>
 
