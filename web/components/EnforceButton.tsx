@@ -1,7 +1,7 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, publicClient} from "@/lib/chain";
+import {ADDR, publicClient, awaitTx} from "@/lib/chain";
 import {registryAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
@@ -48,7 +48,7 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
         args: [mandate.id],
       });
       toast.update(id, {body: "Waiting for confirmation…", hash});
-      await publicClient.waitForTransactionReceipt({hash});
+      await awaitTx(hash);
       toast.update(id, {
         kind: "success",
         title: `Mandate #${mandate.id} enforced`,

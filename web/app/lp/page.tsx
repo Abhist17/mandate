@@ -4,7 +4,7 @@ import {useState} from "react";
 import {Panel, Stat, StatusPill, Field, Empty, LiveDot} from "@/components/ui";
 import {HeadroomBars, UtilisationBar, type HeadroomBarDatum} from "@/components/Charts";
 import {fetchMandate, fetchPoolStats, fetchRelevantIds, usePolled, type Mandate} from "@/lib/data";
-import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
+import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND, awaitTx} from "@/lib/chain";
 import {registryAbi, poolExtraAbi, erc20Abi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
@@ -314,7 +314,7 @@ function LpActions({position, onDone}: {position: LpPosition; onDone: () => void
     try {
       const hash = await fn();
       toast.update(t, {body: "Waiting for confirmation…", hash});
-      await publicClient.waitForTransactionReceipt({hash});
+      await awaitTx(hash);
       toast.update(t, {kind: "success", title: `${label} confirmed`, hash});
       onDone();
     } catch (e) {
@@ -339,7 +339,7 @@ function LpActions({position, onDone}: {position: LpPosition; onDone: () => void
         account: address!, chain: null, address: ADDR.asset, abi: erc20Abi,
         functionName: "approve", args: [ADDR.pool, units],
       });
-      await publicClient.waitForTransactionReceipt({hash: approve});
+      await awaitTx(approve);
       return client!.writeContract({
         account: address!, chain: null, address: ADDR.pool, abi: poolExtraAbi,
         functionName: "deposit", args: [units, address!],

@@ -1,7 +1,7 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, publicClient, hasDemoIssuer} from "@/lib/chain";
+import {ADDR, publicClient, hasDemoIssuer, awaitTx} from "@/lib/chain";
 import {useToast} from "@/components/Toast";
 import {demoIssuerAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
@@ -113,7 +113,7 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
         address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "claimPreset", args: [preset],
       });
       toast.update(t, {body: "Waiting for confirmation…", hash});
-      await publicClient.waitForTransactionReceipt({hash});
+      await awaitTx(hash);
       const id = (await publicClient.readContract({
         address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "mandateOf", args: [address],
       })) as bigint;

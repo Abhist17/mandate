@@ -13,7 +13,7 @@
  * private risk server, and it is why this file is allowed to be ordinary software.
  */
 
-import {createPublicClient, createWalletClient, http, formatEther, type Address} from "viem";
+import {createPublicClient, createWalletClient, http, fallback, formatEther, type Address} from "viem";
 import {privateKeyToAccount} from "viem/accounts";
 
 import {cfg, monadTestnet} from "./config.js";
@@ -23,7 +23,24 @@ import {MarkStore} from "./store.js";
 import {log, usd} from "./log.js";
 
 const account = privateKeyToAccount(cfg.privateKey);
-const transport = http(cfg.rpcUrl, {retryCount: 5, retryDelay: 250, timeout: 15_000});
+
+// Same fallback set as the web app, for the same reason: every public Monad RPC throttles,
+// and a keeper that stalls on one bad endpoint is a keeper that lets a breach sit unenforced.
+// A local fork stays single-endpoint — never fail over from it to the real network.
+const PUBLIC_RPCS = [
+  "https://testnet-rpc.monad.xyz",
+  "https://rpc.ankr.com/monad_testnet",
+  "https://monad-testnet.rpc.thirdweb.com",
+  "https://rpc-testnet.monadinfra.com",
+];
+const transport = PUBLIC_RPCS.includes(cfg.rpcUrl)
+  ? fallback(
+      [cfg.rpcUrl, ...PUBLIC_RPCS.filter((u) => u !== cfg.rpcUrl)].map((u) =>
+        http(u, {retryCount: 1, timeout: 10_000}),
+      ),
+      {rank: {interval: 60_000, sampleCount: 3}, retryCount: 2},
+    )
+  : http(cfg.rpcUrl, {retryCount: 5, retryDelay: 250, timeout: 15_000});
 const publicClient = createPublicClient({chain: monadTestnet, transport});
 const walletClient = createWalletClient({account, chain: monadTestnet, transport});
 

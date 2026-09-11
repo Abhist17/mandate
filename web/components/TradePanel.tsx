@@ -1,7 +1,7 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, MARKETS, publicClient} from "@/lib/chain";
+import {ADDR, MARKETS, publicClient, awaitTx} from "@/lib/chain";
 import {accountAbi, venueExtraAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
@@ -72,7 +72,7 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
         args: [marketId, isLong, sizeWei, 0n],
       });
       toast.update(t, {body: "Waiting for confirmation…", hash});
-      await publicClient.waitForTransactionReceipt({hash});
+      await awaitTx(hash);
       toast.update(t, {
         kind: "success",
         title: `${isLong ? "Long" : "Short"} ${size} ${sym} filled`,
@@ -101,7 +101,7 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
         args: [id, 0n],
       });
       toast.update(t, {body: "Waiting for confirmation…", hash});
-      await publicClient.waitForTransactionReceipt({hash});
+      await awaitTx(hash);
       toast.update(t, {kind: "success", title: "Position closed", hash});
       onDone();
     } catch (e) {
@@ -233,7 +233,8 @@ function decodeError(e: unknown): string {
   if (s.includes("WouldBreachFloor")) return "Order would put equity under the drawdown floor.";
   if (s.includes("MandateNotActive")) return "This mandate is no longer active.";
   if (s.includes("MandateExpired")) return "This mandate has expired.";
-  if (s.includes("StalePrice")) return "Price feed is stale — the keeper may be down.";
+  if (s.includes("StalePrice")) return "Refused: the price feed is stale. Trading is paused until the keeper refreshes it.";
+  if (s.includes("Transaction reverted")) return "The contract refused this order. Check the banner at the top for why.";
   if (s.includes("InsufficientMargin")) return "Not enough free collateral for that size.";
   if (s.includes("SizeTooSmall")) return "Size is below this market's minimum.";
   if (s.includes("NotMandateTrader")) return "Only this mandate's trader can place orders.";

@@ -2,9 +2,9 @@
 
 import {useState} from "react";
 import type {Address} from "viem";
-import {Panel, Stat, Field, Empty, Explainer, LiveDot} from "@/components/ui";
+import {Panel, Stat, Field, Empty, Explainer, LiveDot, Skeleton} from "@/components/ui";
 import {OfferScatter, type OfferPoint} from "@/components/Charts";
-import {publicClient, ADDR, hasBook, isConfigured, shortAddrSafe} from "@/lib/chain";
+import {publicClient, ADDR, hasBook, isConfigured, shortAddrSafe, awaitTx} from "@/lib/chain";
 import {useToast} from "@/components/Toast";
 import {bookAbi, registryAbi, erc20Abi} from "@/lib/abi";
 import {useSession} from "@/lib/useSession";
@@ -68,7 +68,7 @@ export default function MarketPage() {
   // The signed-in address, not merely a connected one — so a reload lands on your record.
   const {address, signedIn, signIn, signingIn} = useSession();
 
-  const {data, refresh} = usePolled(async () => {
+  const {data, error, refresh} = usePolled(async () => {
     if (!hasBook) return undefined;
     const ids = (await publicClient.readContract({
       address: ADDR.book, abi: bookAbi, functionName: "openOffers",
@@ -133,6 +133,12 @@ export default function MarketPage() {
   const offers = data?.offers ?? [];
   const best = offers.filter((o) => o.qualifies).sort((a, b) => b.profitSplitBps - a.profitSplitBps)[0];
 
+  // Three different states that previously all rendered as "No open offers":
+  //   still loading, failed to load, genuinely empty.
+  // A tester saw the second and read it as the third — while four offers sat on chain.
+  const loading = data === undefined && !error;
+  const failed = data === undefined && Boolean(error);
+
   // Bubble size encodes how demanding the record requirement is, so the trade-off the market
   // is making is visible without reading a single row.
   const scatter: OfferPoint[] = offers.map((o) => {
@@ -196,7 +202,7 @@ export default function MarketPage() {
           signingIn={signingIn}
           best={best}
         />
-        <OffersTable offers={offers} onClaimed={refresh} />
+        <OffersTable offers={offers} onClaimed={refresh} loading={loading} failed={failed} onRetry={refresh} />
       </div>
     </div>
   );
@@ -268,6 +274,23 @@ function RecordCard({
 
   const r = record;
   const unproven = !r || r.mandatesSettled === 0;
+  // `record` undefined here means the read has not landed (or failed) — not "zero record".
+  // Rendering zeros for a trader who has a mandate on chain reads as the app lying to them.
+  if (r === undefined) {
+    return (
+      <Panel title="Your record" right={<LiveDot />}>
+        <div className="space-y-3 p-4">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex justify-between">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+          ))}
+          <p className="pt-1 text-2xs text-txt-lo">Reading your record from the chain…</p>
+        </div>
+      </Panel>
+    );
+  }
   const net = r ? r.realisedProfit - r.realisedLoss : 0n;
 
   return (
@@ -339,7 +362,19 @@ function RecordCard({
   );
 }
 
-function OffersTable({offers, onClaimed}: {offers: Offer[]; onClaimed: () => void}) {
+function OffersTable({
+  offers,
+  onClaimed,
+  loading,
+  failed,
+  onRetry,
+}: {
+  offers: Offer[];
+  onClaimed: () => void;
+  loading: boolean;
+  failed: boolean;
+  onRetry: () => void;
+}) {
   const {address, client, wrongChain} = useSession();
   const toast = useToast();
   const [busy, setBusy] = useState<bigint>();
@@ -354,7 +389,7 @@ function OffersTable({offers, onClaimed}: {offers: Offer[]; onClaimed: () => voi
         address: ADDR.book, abi: bookAbi, functionName: "claim", args: [id],
       });
       toast.update(t, {body: "Waiting for confirmation…", hash});
-      await publicClient.waitForTransactionReceipt({hash});
+      await awaitTx(hash);
       toast.update(t, {
         kind: "success",
         title: "You're funded",
@@ -391,7 +426,30 @@ function OffersTable({offers, onClaimed}: {offers: Offer[]; onClaimed: () => voi
         </span>
       }
     >
-      {offers.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3 p-4">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-3 w-64" />
+              </div>
+              <Skeleton className="h-8 w-28" />
+            </div>
+          ))}
+        </div>
+      ) : failed ? (
+        <div className="space-y-3 px-4 py-8 text-center">
+          <p className="text-sm text-txt-mid">Couldn&rsquo;t reach the network.</p>
+          <p className="text-2xs text-txt-lo">
+            The offers are still there — this page just could not read them. Public RPCs
+            throttle; it usually clears on its own.
+          </p>
+          <button onClick={onRetry} className="btn">
+            Retry
+          </button>
+        </div>
+      ) : offers.length === 0 ? (
         <Empty>
           No open offers. Anyone can post one — capital plus the record they want behind it.
         </Empty>

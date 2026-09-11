@@ -1,4 +1,4 @@
-import {createPublicClient, http, defineChain, type Address} from "viem";
+import {createPublicClient, http, fallback, defineChain, type Address} from "viem";
 
 export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 10143);
 export const RPC_URL = process.env.NEXT_PUBLIC_MONAD_RPC ?? "https://testnet-rpc.monad.xyz";
@@ -18,9 +18,41 @@ export const monadTestnet = defineChain({
   },
 });
 
+/**
+ * Public Monad testnet RPCs, in preference order.
+ *
+ * Every one of these throttles under load — a single eth_call was measured at 11 seconds on
+ * the primary during a busy period — and a page that depends on one endpoint is a page that
+ * hangs whenever that endpoint has a bad minute. viem's fallback transport moves to the next
+ * one on error or timeout, and ranks them by observed latency, so the app quietly uses
+ * whichever is healthiest right now.
+ *
+ * Only used when the configured RPC is the public network. A local fork is a single
+ * endpoint and must stay that way — failing over from it to the real network would send
+ * reads to a chain where the contracts do not exist.
+ */
+const PUBLIC_RPCS = [
+  "https://testnet-rpc.monad.xyz",
+  "https://rpc.ankr.com/monad_testnet",
+  "https://monad-testnet.rpc.thirdweb.com",
+  "https://rpc-testnet.monadinfra.com",
+];
+
+const isPublicNetwork = PUBLIC_RPCS.includes(RPC_URL);
+
+const transport = isPublicNetwork
+  ? fallback(
+      // The configured one first, then the rest.
+      [RPC_URL, ...PUBLIC_RPCS.filter((u) => u !== RPC_URL)].map((url) =>
+        http(url, {retryCount: 1, timeout: 8_000}),
+      ),
+      {rank: {interval: 60_000, sampleCount: 3}, retryCount: 2},
+    )
+  : http(RPC_URL, {retryCount: 3, timeout: 20_000});
+
 export const publicClient = createPublicClient({
   chain: monadTestnet,
-  transport: http(RPC_URL, {retryCount: 3, timeout: 20_000}),
+  transport,
   // Batch JSON-RPC at the transport level AND multicall at the contract level.
   batch: {multicall: {wait: 16}},
 });
@@ -59,3 +91,37 @@ export const BREACH_KIND = ["None", "Trailing drawdown", "Daily loss", "Expiry"]
 
 /** Convenience re-export guard used by the market page. */
 export const shortAddrSafe = true;
+
+/**
+ * Wait for a transaction and REFUSE to call it done if it reverted.
+ *
+ * viem's waitForTransactionReceipt resolves as soon as the transaction is mined — including
+ * when it reverted. A reverted transaction has a receipt; its status is just "reverted". Every
+ * action in this app was treating "mined" as "worked", and a tester saw "Short 10 ETH filled"
+ * in one corner of the screen while MetaMask reported the same transaction as failed in the
+ * other. The contract had refused the order (stale price); the app said it filled.
+ *
+ * Throws with the revert reason where the node gives one, so the toast can show it.
+ */
+export async function awaitTx(hash: `0x${string}`): Promise<void> {
+  const receipt = await publicClient.waitForTransactionReceipt({hash, timeout: 90_000});
+  if (receipt.status === "reverted") {
+    // Replay the call at that block to recover the custom error, if the RPC will tell us.
+    let reason = "reverted on-chain";
+    try {
+      const tx = await publicClient.getTransaction({hash});
+      await publicClient.call({
+        account: tx.from,
+        to: tx.to ?? undefined,
+        data: tx.input,
+        value: tx.value,
+        blockNumber: receipt.blockNumber,
+      });
+    } catch (e) {
+      const m = String(e).match(/(?:custom error|reverted with|Error:)\s*([A-Za-z]+[A-Za-z0-9_]*)/);
+      if (m?.[1]) reason = m[1];
+      else if (String(e).includes("0x276a9723")) reason = "StalePrice";
+    }
+    throw new Error(`Transaction ${reason}`);
+  }
+}
