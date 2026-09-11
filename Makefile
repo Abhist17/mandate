@@ -12,6 +12,15 @@ endif
 
 # firstword, not MAKEFILE_LIST: including .env above puts it in the list too, and awk would
 # then print "Makefile"/".env" as the target name for every line.
+up: ## Bring the whole local stack up (chain, contracts, seed, web, keeper)
+	@./scripts/up.sh
+
+up-fresh: ## Same, but tear down and rebuild from a clean chain
+	@./scripts/up.sh --fresh
+
+down: ## Stop everything `make up` started
+	@./scripts/down.sh
+
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
 

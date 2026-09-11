@@ -55,3 +55,4 @@ DEPLOYMENT.md
 indexer/.envio/
 indexer/envio-env.d.ts
 indexer/generated/
+.local-logs/

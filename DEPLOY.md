@@ -4,6 +4,22 @@ Everything here targets **Monad testnet (chain 10143)**. Nothing touches mainnet
 
 ---
 
+## Running it locally — one command
+
+```bash
+make up          # chain, contracts, prices, seed, web, keeper — from nothing
+make down        # stop everything
+make up-fresh    # tear down and rebuild from a clean chain
+```
+
+`make up` is idempotent: run it again and it reuses whatever is already running. The pieces
+are background processes, so a closed terminal, a reboot or a crashed session leaves the app
+looking reachable but dead — this is the fix. Logs land in `.local-logs/`.
+
+It prints the wallet setup at the end. Read that part: the local fork reports the **same
+chain id as real Monad testnet**, so MetaMask cannot tell them apart and must be given the
+fork as its own network.
+
 ## For judges — fastest path in
 
 If a live deployment is running, the addresses and a funded test wallet are in
