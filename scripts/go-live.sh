@@ -65,11 +65,15 @@ i "https://testnet.monadscan.com/address/$MANDATE_REGISTRY_ADDRESS"
 # ── 3. tune for live gas, first prices, seed ──────────────────────────────────
 step "3. Tune, prices and seed"
 # 60s staleness is a fork-era setting. See scripts/tune-live.sh.
+# Three staleness bounds — oracle, venue, registry — and all three must be widened, or trades
+# revert with StalePrice(.., 60) while the oracle reports the price as fresh. See tune-live.sh.
 for m in 16 32 48; do
   cast send "$ORACLE_ADDRESS" "configureFeed(uint16,bool,uint64,uint16)" $m false 600 2500 \
     --private-key "$PRIVATE_KEY" --rpc-url $LIVE_RPC --legacy >/dev/null
 done
-g "oracle staleness bound 600s (keeper runs in demand mode on the public network)"
+cast send "$MINI_PERP_ADDRESS" "setMaxPriceAge(uint64)" 600 --private-key "$PRIVATE_KEY" --rpc-url $LIVE_RPC --legacy >/dev/null
+cast send "$MANDATE_REGISTRY_ADDRESS" "setMaxMarkAge(uint64)" 600 --private-key "$PRIVATE_KEY" --rpc-url $LIVE_RPC --legacy >/dev/null
+g "staleness bound 600s on oracle, venue and registry (keeper runs in demand mode)"
 TS=$(cast block latest --field timestamp --rpc-url $LIVE_RPC)
 curl -s --max-time 20 https://testnet.perpl.xyz/api/v1/pub/context > "$LOGS/perpl.json"
 python3 - > "$LOGS/prices.txt" <<'PY'

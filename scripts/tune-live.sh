@@ -12,10 +12,19 @@ export PATH="$HOME/.foundry/bin:$PATH"
 set -a; . ./.env; set +a
 RPC=https://testnet-rpc.monad.xyz
 
+# THREE places carry a staleness bound, and they must agree. The oracle has one per feed;
+# MiniPerp has its own (used on every open/close/flatten); MandateRegistry has its own (used
+# on every mark). Widening only the oracle's — which is what happened the first time — leaves
+# every trade reverting with StalePrice(market, publishedAt, 60) while the oracle itself
+# reports the price as perfectly fresh.
 for m in 16 32 48; do
   cast send "$ORACLE_ADDRESS" "configureFeed(uint16,bool,uint64,uint16)" $m false 600 2500 \
-    --private-key "$PRIVATE_KEY" --rpc-url $RPC --legacy >/dev/null && echo "market $m: staleness bound -> 600s"
+    --private-key "$PRIVATE_KEY" --rpc-url $RPC --legacy >/dev/null && echo "oracle market $m: bound -> 600s"
 done
+cast send "$MINI_PERP_ADDRESS" "setMaxPriceAge(uint64)" 600 \
+  --private-key "$PRIVATE_KEY" --rpc-url $RPC --legacy >/dev/null && echo "venue: maxPriceAge -> 600s"
+cast send "$MANDATE_REGISTRY_ADDRESS" "setMaxMarkAge(uint64)" 600 \
+  --private-key "$PRIVATE_KEY" --rpc-url $RPC --legacy >/dev/null && echo "registry: maxMarkAge -> 600s"
 
 # Kick a fresh price in immediately so trading unblocks now rather than on the keeper's first tick.
 TS=$(cast block latest --field timestamp --rpc-url $RPC)
