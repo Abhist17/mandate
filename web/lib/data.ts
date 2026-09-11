@@ -183,6 +183,9 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
 
   const isActive = state.status === 1;
 
+  // Positions are the reads most likely to time out on a public RPC (one per market, each
+  // needing an oracle read). If they fail, show the mandate without them rather than dropping
+  // the mandate from the page — which made cards appear and vanish between polls.
   const [floorTuple, headroomTuple, liveEquity, notional, positions] = await Promise.all([
     publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "floorOf", args: [id]}),
     isActive
@@ -203,7 +206,7 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
           functionName: "notional",
         }) as Promise<bigint>)
       : Promise.resolve(0n),
-    isActive ? readPositions(state.account) : Promise.resolve([]),
+    isActive ? readPositions(state.account).catch(() => [] as Position[]) : Promise.resolve([]),
   ]);
 
   const [floor] = floorTuple as readonly [bigint, bigint];
@@ -298,9 +301,13 @@ export function usePolled<T>(
     if (inFlight.current) return; // never stack requests on a slow RPC
     inFlight.current = true;
     try {
-      setData(await fnRef.current());
+      const next = await fnRef.current();
+      // Functional update so a slow response that lands after a newer one cannot clobber it
+      // with older data — another source of visible flicker on a public RPC.
+      setData(() => next);
       setError(undefined);
     } catch (e) {
+      // Keep whatever we last had. A blank screen is not a better answer than a stale one.
       setError(String(e).slice(0, 200));
     } finally {
       inFlight.current = false;
@@ -316,3 +323,26 @@ export function usePolled<T>(
 
   return {data, error, refresh: () => void run()};
 }
+
+/**
+ * Age of the BTC price feed in seconds, per the chain's own clock. Undefined until known.
+ *
+ * Every trading path reverts on a stale feed, so anything that submits an order should
+ * disable itself well before the cutoff rather than let the user sign a transaction the
+ * contract is certain to refuse.
+ */
+export function useFeedAge(): number | undefined {
+  const {data} = usePolled(async () => {
+    const [[, publishedAt], block] = await Promise.all([
+      publicClient.readContract({
+        address: ADDR.oracle, abi: oracleAbi, functionName: "price", args: [16],
+      }) as Promise<readonly [bigint, bigint]>,
+      publicClient.getBlock({blockTag: "latest"}),
+    ]);
+    return Number(block.timestamp - publishedAt);
+  }, 10_000);
+  return data;
+}
+
+/** The live deployment's staleness bound. Trades disable a little before it. */
+export const FEED_STALE_AT = 600;

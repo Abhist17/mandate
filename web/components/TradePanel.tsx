@@ -6,7 +6,7 @@ import {accountAbi, venueExtraAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
 import {fmtPrice, fmtUsd} from "@/lib/format";
-import type {Mandate} from "@/lib/data";
+import {useFeedAge, FEED_STALE_AT, type Mandate} from "@/lib/data";
 
 /**
  * Order entry.
@@ -25,6 +25,10 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
 
   const isTrader = address?.toLowerCase() === mandate.state.trader.toLowerCase();
   const active = mandate.state.status === 1;
+  const feedAge = useFeedAge();
+  // Refuse to submit into a stale feed: the contract would revert, the user would pay gas for
+  // nothing, and it would look like the app failed. Disable early, with the reason.
+  const feedStale = feedAge !== undefined && feedAge >= FEED_STALE_AT - 30;
   const sizeWei = (() => {
     const n = Number(size);
     return Number.isFinite(n) && n > 0 ? BigInt(Math.round(n * 1e18)) : 0n;
@@ -166,19 +170,27 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => void submit(true)}
-          disabled={!isTrader || busy || wrongChain || sizeWei === 0n}
+          disabled={!isTrader || busy || wrongChain || sizeWei === 0n || feedStale}
           className="btn btn-up py-2"
         >
           {busy ? "…" : "Long"}
         </button>
         <button
           onClick={() => void submit(false)}
-          disabled={!isTrader || busy || wrongChain || sizeWei === 0n}
+          disabled={!isTrader || busy || wrongChain || sizeWei === 0n || feedStale}
           className="btn btn-down py-2"
         >
           {busy ? "…" : "Short"}
         </button>
       </div>
+
+      {feedStale && (
+        <p className="rounded-lg border border-down/30 bg-down/[0.07] px-2.5 py-2 text-2xs leading-relaxed text-down">
+          Trading is paused — the price feed is {Math.floor((feedAge ?? 0) / 60)} minutes old and
+          the contract refuses orders against a stale price. Not something you did; the keeper
+          needs to refresh it.
+        </p>
+      )}
 
       {!isTrader && (
         <p className="text-2xs text-txt-lo">

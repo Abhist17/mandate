@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {EquityChart} from "@/components/EquityChart";
 import {TradePanel} from "@/components/TradePanel";
 import {ClaimMandate} from "@/components/ClaimMandate";
@@ -32,10 +32,22 @@ export default function TraderPage() {
 
   // Active mandates, the viewer's own, and a short settled tail — one multicall, not a
   // guessed numeric range fetched one by one.
+  const known = useRef(new Map<string, Mandate>());
   const {data: mandates} = usePolled(async () => {
     const ids = await fetchRelevantIds(sessionAddress);
     const all = await Promise.all(ids.map((id) => fetchMandate(id).catch(() => undefined)));
-    return all.filter((m): m is Mandate => m !== undefined);
+    // Merge into what we already know: a mandate whose read failed this tick keeps its last
+    // value instead of disappearing. Anything settled or gone drops out on its own because
+    // fetchRelevantIds stops returning it.
+    const next = new Map<string, Mandate>();
+    for (const id of ids) {
+      const fresh = all.find((m) => m?.id === id);
+      const prev = known.current.get(id.toString());
+      if (fresh) next.set(id.toString(), fresh);
+      else if (prev) next.set(id.toString(), prev);
+    }
+    known.current = next;
+    return [...next.values()];
   }, 4_000, [sessionAddress]);
 
   // Open on YOUR mandate if you have one; otherwise on whichever is closest to its floor,
@@ -59,10 +71,15 @@ export default function TraderPage() {
     setSelected(pick.id);
   }, [mandates, selected, sessionAddress]);
 
-  const mandate = useMemo(
-    () => mandates?.find((m) => m.id === selected),
-    [mandates, selected],
-  );
+  // Remember the last good version of the selected mandate. A single poll where its reads
+  // failed would otherwise unmount the whole detail view for one tick and remount it the
+  // next — the flicker. Stale-for-a-tick beats blank-for-a-tick.
+  const lastGood = useRef<Mandate | undefined>(undefined);
+  const mandate = useMemo(() => {
+    const found = mandates?.find((m) => m.id === selected);
+    if (found) lastGood.current = found;
+    return found ?? (lastGood.current?.id === selected ? lastGood.current : undefined);
+  }, [mandates, selected]);
 
   useEffect(() => {
     if (selected === undefined) return;

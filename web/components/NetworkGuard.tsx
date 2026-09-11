@@ -24,8 +24,17 @@ export function NetworkGuard({children}: {children: React.ReactNode}) {
     if (!isConfigured) return {app: true, wallet: true};
 
     // 1. Does the network the APP reads from have our contracts?
-    const appCode = await publicClient.getCode({address: ADDR.registry});
-    const app = Boolean(appCode && appCode !== "0x");
+    //
+    // A failed read is NOT "no code". On a public RPC, reads time out and get rate-limited;
+    // treating that as "contracts missing" swapped the entire page for a red banner and back
+    // every few seconds — the flicker a tester reported. Only an explicit "0x" means missing.
+    let app = true;
+    try {
+      const appCode = await publicClient.getCode({address: ADDR.registry});
+      app = appCode !== "0x" && appCode !== undefined;
+    } catch {
+      app = true;
+    }
 
     // 2. Does the network the WALLET will SEND to have them?
     //
@@ -49,7 +58,7 @@ export function NetworkGuard({children}: {children: React.ReactNode}) {
     }
 
     return {app, wallet};
-  }, 12_000, [address]);
+  }, 30_000, [address]);
 
   // Undefined on first paint — don't flash a scary banner before we know.
   if (data === undefined || (data.app && data.wallet)) return <>{children}</>;
