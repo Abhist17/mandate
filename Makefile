@@ -53,7 +53,10 @@ deploy-testnet: ## Deploy to whatever MONAD_TESTNET_RPC points at (local fork or
 # Deliberately ignores MONAD_TESTNET_RPC and targets the public network explicitly.
 # A local anvil fork reports the SAME chain id as Monad testnet (10143), so "which network
 # am I on" cannot be answered from the chain id alone — it has to be stated.
-deploy-live: ## Deploy to the PUBLIC Monad testnet (needs a funded PRIVATE_KEY in .env)
+set-key: ## Securely put your deployer key into .env (hidden prompt, never on screen)
+	@./scripts/set-key.sh
+
+deploy-live: ## Deploy to the PUBLIC Monad testnet (run `make set-key` first)
 	@grep -q '^PRIVATE_KEY=0xac0974bec' .env && \
 		{ echo "PRIVATE_KEY in .env is still the anvil test key. Set your own funded key first."; exit 1; } || true
 	cd contracts && MONAD_TESTNET_RPC=https://testnet-rpc.monad.xyz POOL_ASSET_ADDRESS= \

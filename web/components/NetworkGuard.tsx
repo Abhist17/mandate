@@ -84,9 +84,53 @@ export function NetworkGuard({children}: {children: React.ReactNode}) {
             <p className="mt-2 max-w-2xl text-2xs leading-relaxed text-txt-lo">
               Both networks report chain id <span className="num">{CHAIN_ID}</span> — a local fork
               keeps the chain id of whatever it forks — so your wallet cannot tell them apart and
-              neither can a chain-id check. Point your wallet at the same RPC this page uses, or
-              deploy the contracts to the network your wallet is on.
+              neither can a chain-id check.
             </p>
+
+            {/* Say what to DO. A warning that only says what is wrong leaves the reader
+                exactly as stuck as before, just better informed. */}
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-edge bg-ink-950 p-3.5">
+                <div className="text-2xs font-semibold uppercase tracking-[0.1em] text-txt-hi">
+                  Option A · use this local copy
+                </div>
+                <ol className="mt-2 list-decimal space-y-1 pl-4 text-2xs leading-relaxed text-txt-mid">
+                  <li>
+                    MetaMask → Networks → <span className="text-txt-hi">Add network manually</span>
+                  </li>
+                  <li>
+                    Name <span className="num text-txt-hi">Mandate Local</span> · RPC{" "}
+                    <span className="num text-txt-hi">{RPC_URL}</span> · Chain ID{" "}
+                    <span className="num text-txt-hi">{CHAIN_ID}</span> · Symbol{" "}
+                    <span className="num text-txt-hi">MON</span>
+                  </li>
+                  <li>Switch to it, then import the test account shown in your terminal</li>
+                </ol>
+                <p className="mt-2 text-2xs text-txt-lo">
+                  Works in two minutes. Only on this machine.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-up/25 bg-up/[0.04] p-3.5">
+                <div className="text-2xs font-semibold uppercase tracking-[0.1em] text-up">
+                  Option B · deploy to the real network
+                </div>
+                <ol className="mt-2 list-decimal space-y-1 pl-4 text-2xs leading-relaxed text-txt-mid">
+                  <li>
+                    In a terminal:{" "}
+                    <span className="num text-txt-hi">./scripts/set-key.sh</span> — paste your key
+                    when prompted (hidden)
+                  </li>
+                  <li>
+                    Then <span className="num text-txt-hi">make deploy-live</span>
+                  </li>
+                </ol>
+                <p className="mt-2 text-2xs text-txt-lo">
+                  Your wallet works as-is, and so does everyone else&rsquo;s. This is the one
+                  that lets you share the link.
+                </p>
+              </div>
+            </div>
           </>
         ) : (
           <>
