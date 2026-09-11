@@ -13,6 +13,20 @@ export const registryAbi = [
   },
   {
     type: "function",
+    name: "mandatesOf",
+    inputs: [{name: "trader", type: "address"}],
+    outputs: [{type: "uint256[]"}],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "nextMandateId",
+    inputs: [],
+    outputs: [{type: "uint256"}],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "markAndEnforce",
     inputs: [{name: "mandateId", type: "uint256"}],
     outputs: [{type: "bool"}],

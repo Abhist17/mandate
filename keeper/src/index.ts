@@ -95,12 +95,18 @@ async function pushPrices(prices: MarketPrice[], chainTime: bigint): Promise<voi
  * Batched deliberately: this is where the Monad argument lives. A per-block risk loop over
  * hundreds of accounts is only economically viable if one mark costs a fraction of a cent.
  */
-async function markAll(blockNumber: bigint, prices: MarketPrice[]): Promise<void> {
-  const active = (await publicClient.readContract({
-    address: cfg.registry,
-    abi: registryAbi,
-    functionName: "activeMandates",
-  })) as readonly bigint[];
+async function markAll(
+  blockNumber: bigint,
+  prices: MarketPrice[],
+  only?: readonly bigint[],
+): Promise<void> {
+  const active =
+    only ??
+    ((await publicClient.readContract({
+      address: cfg.registry,
+      abi: registryAbi,
+      functionName: "activeMandates",
+    })) as readonly bigint[]);
 
   if (active.length === 0) return;
 
@@ -197,12 +203,50 @@ async function summary(): Promise<void> {
   });
 }
 
+/** Which active mandates are at or under their floor right now. Reads only. */
+async function findBreaches(active: readonly bigint[]): Promise<bigint[]> {
+  const out: bigint[] = [];
+  for (const id of active) {
+    try {
+      const [[floor], live] = await Promise.all([
+        publicClient.readContract({
+          address: cfg.registry, abi: registryAbi, functionName: "floorOf", args: [id],
+        }) as Promise<readonly [bigint, bigint]>,
+        publicClient.readContract({
+          address: cfg.registry, abi: registryAbi, functionName: "liveEquity", args: [id],
+        }) as Promise<bigint>,
+      ]);
+      // Under, or within nearFloorBps of it: mark now rather than wait for the schedule.
+      const threshold = floor + (floor * BigInt(cfg.nearFloorBps)) / 10_000n;
+      if (live <= threshold) out.push(id);
+    } catch {
+      /* a mandate that cannot be read is not evidence of anything */
+    }
+  }
+  return out;
+}
+
+async function hasGas(): Promise<boolean> {
+  const bal = await publicClient.getBalance({address: account.address});
+  const mon = Number(formatEther(bal));
+  if (mon < cfg.minBalanceMon) {
+    log.warn("keeper wallet is nearly empty — not sending transactions", {
+      mon: mon.toFixed(4),
+      floor: cfg.minBalanceMon,
+      address: account.address,
+    });
+    return false;
+  }
+  return true;
+}
+
 async function main(): Promise<void> {
   log.banner("Mandate risk keeper");
   log.info("config", {
     chain: monadTestnet.id,
     keeper: account.address,
     registry: cfg.registry,
+    mode: cfg.mode,
     batch: cfg.maxBatch,
   });
 
@@ -225,8 +269,13 @@ async function main(): Promise<void> {
 
   log.info("enforce() is permissionless: this keeper is a convenience, not a trust assumption");
 
-  let lastBlock = 0n;
+  if (cfg.mode === "block") return blockLoop();
+  return demandLoop();
+}
 
+/** Fork mode: mark everything, every block. Gas is free. */
+async function blockLoop(): Promise<void> {
+  let lastBlock = 0n;
   while (running) {
     try {
       const block = await publicClient.getBlock({blockTag: "latest"});
@@ -245,17 +294,71 @@ async function main(): Promise<void> {
       consecutiveFailures = 0;
       if (store.totals.blocksObserved % 200 === 0) await summary();
     } catch (err) {
-      consecutiveFailures++;
-      // Back off on a sustained RPC problem rather than hammering a struggling node.
-      const backoff = Math.min(1_000 * 2 ** Math.min(consecutiveFailures, 5), 30_000);
-      log.error("loop error, backing off", {
-        ms: backoff,
-        failures: consecutiveFailures,
-        err: String(err).slice(0, 160),
-      });
-      await new Promise((r) => setTimeout(r, backoff));
+      await backoff(err);
     }
   }
+}
+
+/**
+ * Live mode: watch for free, transact only when it matters.
+ *
+ *   every watchIntervalMs   read live equity vs floor for every active mandate (free)
+ *                           -> mark any at/under/near its floor immediately
+ *                           -> refresh prices if moved > minPriceMoveBps or getting stale
+ *   every routineMarkMs     mark everything, so lastMarkedEquity and day rollovers keep up
+ */
+async function demandLoop(): Promise<void> {
+  let lastRoutineMark = 0;
+  log.info("demand mode", {
+    watchEvery: `${cfg.watchIntervalMs / 1000}s`,
+    routineMarkEvery: `${cfg.routineMarkIntervalMs / 60_000}m`,
+    priceRefreshEvery: `${cfg.maxPriceAgeMs / 60_000}m or ${cfg.minPriceMoveBps}bp move`,
+  });
+
+  while (running) {
+    try {
+      const block = await publicClient.getBlock({blockTag: "latest"});
+      store.observeBlock();
+
+      const snapshot = await fetchPerplPrices();
+
+      const active = (await publicClient.readContract({
+        address: cfg.registry, abi: registryAbi, functionName: "activeMandates",
+      })) as readonly bigint[];
+
+      if (await hasGas()) {
+        // Prices first: a mark against a stale feed reverts, and enforcement must never be
+        // blocked by a feed we let go stale ourselves.
+        await pushPrices(snapshot.prices, block.timestamp);
+
+        const urgent = await findBreaches(active);
+        const routineDue = Date.now() - lastRoutineMark >= cfg.routineMarkIntervalMs;
+
+        if (urgent.length > 0) {
+          log.warn("mandate(s) at or near the floor — marking now", {ids: urgent.join(",")});
+          await markAll(block.number, snapshot.prices, urgent);
+        } else if (routineDue && active.length > 0) {
+          log.info("routine mark", {mandates: active.length});
+          await markAll(block.number, snapshot.prices);
+          lastRoutineMark = Date.now();
+        }
+        if (urgent.length > 0 && routineDue) lastRoutineMark = Date.now();
+      }
+
+      consecutiveFailures = 0;
+      if (store.totals.blocksObserved % 50 === 0) await summary();
+    } catch (err) {
+      await backoff(err);
+    }
+    await new Promise((r) => setTimeout(r, cfg.watchIntervalMs));
+  }
+}
+
+async function backoff(err: unknown): Promise<void> {
+  consecutiveFailures++;
+  const ms = Math.min(1_000 * 2 ** Math.min(consecutiveFailures, 5), 30_000);
+  log.error("loop error, backing off", {ms, failures: consecutiveFailures, err: String(err).slice(0, 160)});
+  await new Promise((r) => setTimeout(r, ms));
 }
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {

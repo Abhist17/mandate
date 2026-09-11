@@ -49,10 +49,37 @@ export const cfg = {
   pollMs: Number(process.env.KEEPER_BLOCK_POLL_MS ?? 250),
   /** Mandates per markAndEnforceBatch call. */
   maxBatch: Number(process.env.KEEPER_MAX_BATCH ?? 25),
-  /** Skip a price push if the market moved less than this since the last one. */
-  minPriceMoveBps: Number(process.env.KEEPER_MIN_PRICE_MOVE_BPS ?? 1),
-  /** Force a price push at least this often even when the market is flat. */
-  maxPriceAgeMs: Number(process.env.KEEPER_MAX_PRICE_AGE_MS ?? 20_000),
+
+  // ── gas economy ────────────────────────────────────────────────────────────
+  //
+  // On a local fork every transaction is free, and marking every block is the natural
+  // rhythm. On the public testnet the base fee is ~100 gwei, a batch mark of five
+  // mandates is ~400k gas, and a keeper that marks every 400ms drains a deployer wallet
+  // in minutes. The first live run proved it: 1.1 MON gone before anyone noticed.
+  //
+  // The economics of the PRODUCT are unchanged — at ~$0.03/MON a mark is ~$0.0003, which
+  // is the sub-cent figure the pitch relies on. What is scarce on testnet is MON itself,
+  // because the faucet doles it out in small amounts. So on the public network the keeper
+  // marks on demand: it reads every mandate's live equity against its floor every few
+  // seconds (reads are free), sends a mark only when one is at or under its floor, and
+  // otherwise marks everything on a slow schedule so lastMarkedEquity does not drift too
+  // far. Enforcement stays prompt; routine marking stops costing anything.
+
+  /** "block" marks every block (fork). "demand" marks on breach + a slow schedule (live). */
+  mode: (process.env.KEEPER_MODE ?? "demand") as "block" | "demand",
+  /** demand mode: how often to read live equity vs floor. Free. */
+  watchIntervalMs: Number(process.env.KEEPER_WATCH_INTERVAL_MS ?? 8_000),
+  /** demand mode: mark everything at least this often regardless. */
+  routineMarkIntervalMs: Number(process.env.KEEPER_ROUTINE_MARK_MS ?? 5 * 60_000),
+  /** Mark a mandate proactively once its headroom is under this many bps. */
+  nearFloorBps: Number(process.env.KEEPER_NEAR_FLOOR_BPS ?? 25),
+
+  /** Skip a price push if no market moved more than this since the last push. */
+  minPriceMoveBps: Number(process.env.KEEPER_MIN_PRICE_MOVE_BPS ?? 40),
+  /** Push prices at least this often — must stay under the oracle's staleness bound. */
+  maxPriceAgeMs: Number(process.env.KEEPER_MAX_PRICE_AGE_MS ?? 4 * 60_000),
+  /** Stop sending transactions below this balance so the wallet is never fully drained. */
+  minBalanceMon: Number(process.env.KEEPER_MIN_BALANCE_MON ?? 0.02),
 
   storePath: process.env.KEEPER_STORE_PATH ?? "./keeper/data/marks.json",
 } as const;

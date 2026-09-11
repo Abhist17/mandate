@@ -236,6 +236,28 @@ export async function fetchActiveIds(): Promise<bigint[]> {
   return [...(ids as readonly bigint[])];
 }
 
+/**
+ * Every mandate id worth showing: all Active ones, the viewer's own (so a breached mandate of
+ * theirs stays inspectable), and a short tail of recently settled ones for the history views.
+ *
+ * Replaces a loop that guessed ids 1..highest+6 and fetched each in full. Against a real RPC
+ * that was ~90 calls per refresh; this is one multicall.
+ */
+export async function fetchRelevantIds(viewer?: Address): Promise<bigint[]> {
+  const [active, mine, next] = await Promise.all([
+    publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "activeMandates"}) as Promise<readonly bigint[]>,
+    viewer
+      ? (publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "mandatesOf", args: [viewer]}) as Promise<readonly bigint[]>)
+      : Promise.resolve([] as readonly bigint[]),
+    publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "nextMandateId"}) as Promise<bigint>,
+  ]);
+
+  const ids = new Set<bigint>([...active, ...mine]);
+  // Recently settled: the last few ids that are not active. Bounded, so it never fans out.
+  for (let i = next - 1n; i >= 1n && i > next - 9n; i--) ids.add(i);
+  return [...ids].sort((a, b) => (a < b ? -1 : 1));
+}
+
 export async function fetchPoolStats(): Promise<PoolStats> {
   const [totalAssets, idle, allocated, pricePerShare, utilisationBps] = await Promise.all([
     publicClient.readContract({address: ADDR.pool, abi: poolAbi, functionName: "totalAssets"}),
@@ -257,12 +279,13 @@ export async function fetchPoolStats(): Promise<PoolStats> {
  * Poll on an interval.
  *
  * Monad produces a block roughly every 400ms. Polling that fast from a browser is a good way
- * to be rate-limited for no benefit, so the default is 2s — fast enough that the
- * distance-to-floor readout is live, slow enough to be a good citizen.
+ * to be rate-limited for no benefit. The default is 4s: fast enough that the
+ * distance-to-floor readout reads as live, slow enough that a public RPC does not throttle
+ * us. Every read inside one tick is multicalled into a single request anyway.
  */
 export function usePolled<T>(
   fn: () => Promise<T>,
-  intervalMs = 2_000,
+  intervalMs = 4_000,
   deps: unknown[] = [],
 ): {data: T | undefined; error: string | undefined; refresh: () => void} {
   const [data, setData] = useState<T>();

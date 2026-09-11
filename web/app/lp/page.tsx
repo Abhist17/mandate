@@ -3,7 +3,7 @@
 import {useState} from "react";
 import {Panel, Stat, StatusPill, Field, Empty, LiveDot} from "@/components/ui";
 import {HeadroomBars, UtilisationBar, type HeadroomBarDatum} from "@/components/Charts";
-import {fetchMandate, fetchPoolStats, usePolled, type Mandate} from "@/lib/data";
+import {fetchMandate, fetchPoolStats, fetchRelevantIds, usePolled, type Mandate} from "@/lib/data";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
 import {registryAbi, poolExtraAbi, erc20Abi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
@@ -25,17 +25,10 @@ export default function LpPage() {
   const {data: pool} = usePolled(fetchPoolStats, 3_000);
 
   const {data: mandates} = usePolled(async () => {
-    const active = (await publicClient.readContract({
-      address: ADDR.registry,
-      abi: registryAbi,
-      functionName: "activeMandates",
-    })) as readonly bigint[];
-    const highest = active.length > 0 ? active[active.length - 1]! : 0n;
-    const ids: bigint[] = [];
-    for (let i = 1n; i <= highest + 6n; i++) ids.push(i);
+    const ids = await fetchRelevantIds(address);
     const all = await Promise.all(ids.map((id) => fetchMandate(id).catch(() => undefined)));
     return all.filter((m): m is Mandate => m !== undefined);
-  }, 4_000);
+  }, 5_000, [address]);
 
   const {data: position, refresh} = usePolled(async () => {
     if (!address) return undefined;

@@ -8,7 +8,7 @@ import {PayoutPanel} from "@/components/PayoutPanel";
 import {EnforceButton} from "@/components/EnforceButton";
 import {Onboarding} from "@/components/Onboarding";
 import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer, Skeleton} from "@/components/ui";
-import {fetchActiveIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
+import {fetchRelevantIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
 import {useSession} from "@/lib/useSession";
@@ -28,27 +28,15 @@ export default function TraderPage() {
   const [curve, setCurve] = useState<EquityPoint[]>([]);
   const [curveSource, setCurveSource] = useState<"envio" | "rpc">("rpc");
 
-  // Every mandate the registry has ever issued, so breached ones stay inspectable.
-  const {data: allIds} = usePolled(async () => {
-    const next = (await publicClient.readContract({
-      address: ADDR.registry,
-      abi: registryAbi,
-      functionName: "activeMandates",
-    })) as readonly bigint[];
-    const active = [...next];
-    const highest = active.length > 0 ? active[active.length - 1]! : 0n;
-    const all: bigint[] = [];
-    for (let i = 1n; i <= highest + 6n; i++) all.push(i);
-    return {active, all};
-  }, 6_000);
-
-  const {data: mandates} = usePolled(async () => {
-    if (!allIds) return [] as Mandate[];
-    const settled = await Promise.all(allIds.all.map((id) => fetchMandate(id).catch(() => undefined)));
-    return settled.filter((m): m is Mandate => m !== undefined);
-  }, 2_500, [allIds?.all.length]);
-
   const {address: sessionAddress} = useSession();
+
+  // Active mandates, the viewer's own, and a short settled tail — one multicall, not a
+  // guessed numeric range fetched one by one.
+  const {data: mandates} = usePolled(async () => {
+    const ids = await fetchRelevantIds(sessionAddress);
+    const all = await Promise.all(ids.map((id) => fetchMandate(id).catch(() => undefined)));
+    return all.filter((m): m is Mandate => m !== undefined);
+  }, 4_000, [sessionAddress]);
 
   // Open on YOUR mandate if you have one; otherwise on whichever is closest to its floor,
   // because that is the one worth watching.
