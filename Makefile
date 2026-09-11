@@ -53,6 +53,9 @@ deploy-testnet: ## Deploy to whatever MONAD_TESTNET_RPC points at (local fork or
 # Deliberately ignores MONAD_TESTNET_RPC and targets the public network explicitly.
 # A local anvil fork reports the SAME chain id as Monad testnet (10143), so "which network
 # am I on" cannot be answered from the chain id alone — it has to be stated.
+go-live: ## Wait for deployer gas, deploy to Monad testnet, rebuild, tunnel, print public URL
+	@./scripts/go-live.sh
+
 set-key: ## Securely put your deployer key into .env (hidden prompt, never on screen)
 	@./scripts/set-key.sh
 
