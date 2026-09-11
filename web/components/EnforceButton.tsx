@@ -1,7 +1,7 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, publicClient, awaitTx} from "@/lib/chain";
+import {ADDR, awaitTx, sendTx, describeRevert} from "@/lib/chain";
 import {registryAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
@@ -39,9 +39,9 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
       body: "Marking to market and flattening the position.",
     });
     try {
-      const hash = await client.writeContract({
+      const hash = await sendTx({
+        client,
         account: address,
-        chain: null,
         address: ADDR.registry,
         abi: registryAbi,
         functionName: "markAndEnforce",
@@ -60,9 +60,7 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
       toast.update(id, {
         kind: "error",
         title: "Enforcement failed",
-        body: String(e).includes("denied")
-          ? "Rejected in wallet."
-          : String(e).split("\n")[0]?.slice(0, 140),
+        body: String(e).includes("denied") ? "Rejected in wallet." : describeRevert(e).slice(0, 140),
       });
     } finally {
       setBusy(false);

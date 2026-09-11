@@ -4,7 +4,7 @@ import {useState} from "react";
 import {Panel, Stat, StatusPill, Field, Empty, LiveDot} from "@/components/ui";
 import {HeadroomBars, UtilisationBar, type HeadroomBarDatum} from "@/components/Charts";
 import {fetchMandate, fetchPoolStats, fetchRelevantIds, usePolled, type Mandate} from "@/lib/data";
-import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND, awaitTx} from "@/lib/chain";
+import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND, awaitTx, sendTx, describeRevert} from "@/lib/chain";
 import {registryAbi, poolExtraAbi, erc20Abi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
@@ -326,7 +326,7 @@ function LpActions({position, onDone}: {position: LpPosition; onDone: () => void
           ? "Rejected in wallet."
           : s.includes("InsufficientIdleCapital")
             ? "Not enough idle capital — allocated capital is locked until a mandate settles."
-            : s.split("\n")[0]?.slice(0, 140),
+            : describeRevert(e).slice(0, 140),
       });
     } finally {
       setBusy(false);
@@ -335,39 +335,24 @@ function LpActions({position, onDone}: {position: LpPosition; onDone: () => void
 
   const deposit = () =>
     run("Deposit", async () => {
-      const approve = await client!.writeContract({
-        account: address!, chain: null, address: ADDR.asset, abi: erc20Abi,
-        functionName: "approve", args: [ADDR.pool, units],
-      });
+      const approve = await sendTx({client: client!, account: address!, address: ADDR.asset, abi: erc20Abi, functionName: "approve", args: [ADDR.pool, units]});
       await awaitTx(approve);
-      return client!.writeContract({
-        account: address!, chain: null, address: ADDR.pool, abi: poolExtraAbi,
-        functionName: "deposit", args: [units, address!],
-      });
+      return sendTx({client: client!, account: address!, address: ADDR.pool, abi: poolExtraAbi, functionName: "deposit", args: [units, address!]});
     });
 
   const requestOut = () =>
     run("Withdrawal request", () =>
-      client!.writeContract({
-        account: address!, chain: null, address: ADDR.pool, abi: poolExtraAbi,
-        functionName: "requestWithdrawal", args: [position!.shares],
-      }),
+      sendTx({client: client!, account: address!, address: ADDR.pool, abi: poolExtraAbi, functionName: "requestWithdrawal", args: [position!.shares]}),
     );
 
   const claim = () =>
     run("Claim", () =>
-      client!.writeContract({
-        account: address!, chain: null, address: ADDR.pool, abi: poolExtraAbi,
-        functionName: "claimWithdrawal", args: [],
-      }),
+      sendTx({client: client!, account: address!, address: ADDR.pool, abi: poolExtraAbi, functionName: "claimWithdrawal", args: []}),
     );
 
   const mint = () =>
     run("Faucet", () =>
-      client!.writeContract({
-        account: address!, chain: null, address: ADDR.asset, abi: erc20Abi,
-        functionName: "mint", args: [address!, 100_000n * 1_000_000n],
-      }),
+      sendTx({client: client!, account: address!, address: ADDR.asset, abi: erc20Abi, functionName: "mint", args: [address!, 100_000n * 1_000_000n]}),
     );
 
   if (!address) {

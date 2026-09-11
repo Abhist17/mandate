@@ -1,7 +1,7 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, MARKETS, publicClient, awaitTx} from "@/lib/chain";
+import {ADDR, MARKETS, publicClient, awaitTx, sendTx} from "@/lib/chain";
 import {accountAbi, venueExtraAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
@@ -63,9 +63,9 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
       body: "The contract checks this against your position cap before it fills.",
     });
     try {
-      const hash = await client.writeContract({
+      const hash = await sendTx({
+        client,
         account: address,
-        chain: null,
         address: mandate.state.account,
         abi: accountAbi,
         functionName: "openPosition",
@@ -92,9 +92,9 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
     setBusy(true);
     const t = toast.push({kind: "pending", title: "Closing position", body: "Confirm in your wallet."});
     try {
-      const hash = await client.writeContract({
+      const hash = await sendTx({
+        client,
         account: address,
-        chain: null,
         address: mandate.state.account,
         abi: accountAbi,
         functionName: "closePosition",
@@ -228,13 +228,15 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
  * A trader who hits the position cap should be told they hit the position cap.
  */
 function decodeError(e: unknown): string {
-  const s = String(e);
+  const s = e instanceof Error ? e.message : String(e);
   if (s.includes("PositionCapExceeded")) return "Order exceeds this mandate's position cap.";
   if (s.includes("WouldBreachFloor")) return "Order would put equity under the drawdown floor.";
   if (s.includes("MandateNotActive")) return "This mandate is no longer active.";
   if (s.includes("MandateExpired")) return "This mandate has expired.";
   if (s.includes("StalePrice")) return "Refused: the price feed is stale. Trading is paused until the keeper refreshes it.";
   if (s.includes("Transaction reverted")) return "The contract refused this order. Check the banner at the top for why.";
+  if (s.includes("MarketClosed")) return "That market is closed right now.";
+  if (s.includes("Unavailable") || s.includes("estimate")) return "Your wallet could not estimate gas — its RPC may be throttled. Try again in a moment.";
   if (s.includes("InsufficientMargin")) return "Not enough free collateral for that size.";
   if (s.includes("SizeTooSmall")) return "Size is below this market's minimum.";
   if (s.includes("NotMandateTrader")) return "Only this mandate's trader can place orders.";

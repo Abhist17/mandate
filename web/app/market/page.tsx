@@ -4,7 +4,7 @@ import {useState} from "react";
 import type {Address} from "viem";
 import {Panel, Stat, Field, Empty, Explainer, LiveDot, Skeleton} from "@/components/ui";
 import {OfferScatter, type OfferPoint} from "@/components/Charts";
-import {publicClient, ADDR, hasBook, isConfigured, shortAddrSafe, awaitTx} from "@/lib/chain";
+import {publicClient, ADDR, hasBook, isConfigured, shortAddrSafe, awaitTx, sendTx, describeRevert} from "@/lib/chain";
 import {useToast} from "@/components/Toast";
 import {bookAbi, registryAbi, erc20Abi} from "@/lib/abi";
 import {useSession} from "@/lib/useSession";
@@ -384,8 +384,8 @@ function OffersTable({
     setBusy(id);
     const t = toast.push({kind: "pending", title: "Taking the offer", body: "Confirm in your wallet."});
     try {
-      const hash = await client.writeContract({
-        account: address, chain: null,
+      const hash = await sendTx({
+        client, account: address,
         address: ADDR.book, abi: bookAbi, functionName: "claim", args: [id],
       });
       toast.update(t, {body: "Waiting for confirmation…", hash});
@@ -410,7 +410,7 @@ function OffersTable({
               ? "Rejected in wallet."
               : s.includes("insufficient funds")
                 ? "Not enough MON for gas — grab some from the faucet."
-                : s.split("\n")[0]?.slice(0, 140),
+                : describeRevert(e).slice(0, 140),
       });
     } finally {
       setBusy(undefined);

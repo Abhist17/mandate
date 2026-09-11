@@ -1,4 +1,5 @@
-import {createPublicClient, http, fallback, defineChain, type Address} from "viem";
+import {createPublicClient, http, fallback, defineChain, encodeFunctionData, type Address, type Abi, type WalletClient, BaseError, ContractFunctionRevertedError} from "viem";
+import {errorsAbi} from "./abi";
 
 export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 10143);
 export const RPC_URL = process.env.NEXT_PUBLIC_MONAD_RPC ?? "https://testnet-rpc.monad.xyz";
@@ -30,11 +31,14 @@ export const monadTestnet = defineChain({
  * Only used when the configured RPC is the public network. A local fork is a single
  * endpoint and must stay that way — failing over from it to the real network would send
  * reads to a chain where the contracts do not exist.
+ *
+ * Every entry here must answer a browser, not just curl: thirdweb's endpoint works from a
+ * terminal and returns no Access-Control-Allow-Origin header, so a page cannot use it. The
+ * browser smoke test is what caught that.
  */
 const PUBLIC_RPCS = [
   "https://testnet-rpc.monad.xyz",
   "https://rpc.ankr.com/monad_testnet",
-  "https://monad-testnet.rpc.thirdweb.com",
   "https://rpc-testnet.monadinfra.com",
 ];
 
@@ -124,4 +128,88 @@ export async function awaitTx(hash: `0x${string}`): Promise<void> {
     }
     throw new Error(`Transaction ${reason}`);
   }
+}
+
+/**
+ * Send a contract write the way a wallet can actually handle on a throttled network.
+ *
+ * What went wrong before: writeContract handed MetaMask a bare call, MetaMask ran
+ * eth_estimateGas through ITS OWN RPC, that RPC was throttled, estimation failed, and the
+ * confirmation dialog said "Network fee: Unavailable". Confirm anyway and MetaMask guesses a
+ * gas limit — too low — so the transaction reverts on-chain and the user pays for nothing.
+ *
+ * Now:
+ *   1. Simulate through OUR failover RPC first. A revert here costs nothing and comes back
+ *      decoded by name (StalePrice, PositionCapExceeded, …) because the ABI carries the
+ *      contracts' custom errors.
+ *   2. Estimate gas through our RPC too, and pass it to the wallet with headroom, so the
+ *      wallet has nothing to estimate and the fee is never "Unavailable".
+ */
+export async function sendTx(args: {
+  client: WalletClient;
+  account: Address;
+  address: Address;
+  abi: Abi | readonly unknown[];
+  functionName: string;
+  args?: readonly unknown[];
+  value?: bigint;
+}): Promise<`0x${string}`> {
+  const abi = [...(args.abi as readonly unknown[]), ...errorsAbi] as Abi;
+  const call = {
+    account: args.account,
+    address: args.address,
+    abi,
+    functionName: args.functionName,
+    args: args.args ?? [],
+    value: args.value,
+  };
+
+  // 1. simulate — fail fast, with a name.
+  try {
+    await publicClient.simulateContract(call as never);
+  } catch (e) {
+    throw new Error(describeRevert(e));
+  }
+
+  // 2. estimate here, not in the wallet.
+  let gas: bigint | undefined;
+  try {
+    const est = await publicClient.estimateGas({
+      account: args.account,
+      to: args.address,
+      data: encodeFunctionData({
+        abi,
+        functionName: args.functionName,
+        args: args.args ?? [],
+      } as never),
+      value: args.value,
+    });
+    gas = (est * 15n) / 10n; // 50% headroom: a fill that reads several oracles varies
+  } catch {
+    gas = undefined; // let the wallet try; simulation already passed
+  }
+
+  return args.client.writeContract({
+    account: args.account,
+    address: args.address,
+    abi,
+    functionName: args.functionName,
+    args: args.args ?? [],
+    value: args.value,
+    chain: null,
+    gas,
+  } as never);
+}
+
+/** Turn a viem revert into the contract's own error name and arguments. */
+export function describeRevert(e: unknown): string {
+  if (e instanceof BaseError) {
+    const r = e.walk((err) => err instanceof ContractFunctionRevertedError);
+    if (r instanceof ContractFunctionRevertedError && r.data?.errorName) {
+      const a = r.data.args?.map(String).join(", ");
+      return `${r.data.errorName}${a ? `(${a})` : ""}`;
+    }
+    return e.shortMessage;
+  }
+  return String(e).split("\n")[0] ?? "unknown error";
 }

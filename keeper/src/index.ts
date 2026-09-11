@@ -30,7 +30,6 @@ const account = privateKeyToAccount(cfg.privateKey);
 const PUBLIC_RPCS = [
   "https://testnet-rpc.monad.xyz",
   "https://rpc.ankr.com/monad_testnet",
-  "https://monad-testnet.rpc.thirdweb.com",
   "https://rpc-testnet.monadinfra.com",
 ];
 const transport = PUBLIC_RPCS.includes(cfg.rpcUrl)

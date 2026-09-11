@@ -1,7 +1,7 @@
 "use client";
 
 import {useState} from "react";
-import {ADDR, publicClient, hasDemoIssuer, awaitTx} from "@/lib/chain";
+import {ADDR, publicClient, hasDemoIssuer, awaitTx, sendTx, describeRevert} from "@/lib/chain";
 import {useToast} from "@/components/Toast";
 import {demoIssuerAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
@@ -108,8 +108,8 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
       body: "Confirm in your wallet.",
     });
     try {
-      const hash = await client.writeContract({
-        account: address, chain: null,
+      const hash = await sendTx({
+        client, account: address,
         address: ADDR.demoIssuer, abi: demoIssuerAbi, functionName: "claimPreset", args: [preset],
       });
       toast.update(t, {body: "Waiting for confirmation…", hash});
@@ -142,7 +142,7 @@ export function ClaimMandate({onClaimed}: {onClaimed: (mandateId: bigint) => voi
                   ? "Not enough MON for gas — grab some from the faucet."
                   : // Anything else verbatim rather than swallowed: a bare "failed" tells the
                     // user nothing and tells us nothing either.
-                    (s.split("\n")[0]?.slice(0, 140) ?? "unknown error"),
+                    describeRevert(e).slice(0, 140),
       });
     } finally {
       setBusy(false);
