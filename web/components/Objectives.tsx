@@ -152,7 +152,12 @@ export function Objectives({mandate}: {mandate: Mandate}) {
     },
   ] satisfies Row[]).filter((r) => r.applies);
 
-  const failing = rows.filter((r) => !r.ok).length;
+  // A missed condition is not a breach. The summary used to count both together and
+  // announce "1 breached" above a caption explaining that conditions gate the payout and
+  // not the account — the panel contradicting itself two lines apart, on the one screen
+  // whose whole claim is that it does not.
+  const breached = rows.filter((r) => r.group === "limit" && !r.ok).length;
+  const held = rows.filter((r) => r.group === "condition" && !r.ok).length;
 
   return (
     <section className="panel rise">
@@ -162,12 +167,20 @@ export function Objectives({mandate}: {mandate: Mandate}) {
           className={`rounded-md border px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] ${
             !active
               ? "border-ink-600 bg-ink-800 text-txt-mid"
-              : failing === 0
-                ? "border-up/30 bg-up/10 text-up"
-                : "border-down/40 bg-down/10 text-down"
+              : breached > 0
+                ? "border-down/40 bg-down/10 text-down"
+                : held > 0
+                  ? "border-warn/30 bg-warn/10 text-warn"
+                  : "border-up/30 bg-up/10 text-up"
           }`}
         >
-          {!active ? "closed" : failing === 0 ? "all passing" : `${failing} breached`}
+          {!active
+            ? "closed"
+            : breached > 0
+              ? `${breached} breached`
+              : held > 0
+                ? "payout held"
+                : "all passing"}
         </span>
       </header>
 
