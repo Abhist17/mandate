@@ -56,3 +56,4 @@ indexer/.envio/
 indexer/envio-env.d.ts
 indexer/generated/
 .local-logs/
+web/public/status.json

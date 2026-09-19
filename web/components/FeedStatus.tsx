@@ -15,7 +15,32 @@ import {usePolled} from "@/lib/data";
  * of the page in plain language, with the age and the cause. It was not, and the first real
  * tester spent twenty minutes thinking the site was broken.
  */
+type Status = {
+  checkedAt: string;
+  feedAgeSeconds: number;
+  keeperBalanceMon: number;
+  lowGas: boolean;
+  problems: string[];
+  healthy: boolean;
+};
+
 export function FeedStatus() {
+  // Written by scripts/supervise.sh. It knows things the browser cannot — whether the keeper
+  // process is alive, how much gas its wallet has left — so when it is present it explains
+  // the cause rather than leaving the page to infer one from a stale timestamp.
+  const {data: status} = usePolled(async () => {
+    try {
+      const res = await fetch("/status.json", {cache: "no-store"});
+      if (!res.ok) return null;
+      const s = (await res.json()) as Status;
+      // Ignore a status file nobody has refreshed in an hour; a stale report is worse than none.
+      const age = Date.now() - Date.parse(s.checkedAt);
+      return Number.isFinite(age) && age < 3_600_000 ? s : null;
+    } catch {
+      return null;
+    }
+  }, 30_000);
+
   const {data} = usePolled(async () => {
     if (!isConfigured) return undefined;
     const [[, publishedAt], block] = await Promise.all([

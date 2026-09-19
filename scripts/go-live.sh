@@ -108,6 +108,14 @@ kpid=$(pgrep -f "tsx keeper/src/index.ts" | head -1 || true); [ -n "${kpid:-}" ]
 setsid nohup npx tsx keeper/src/index.ts > "$LOGS/keeper.log" 2>&1 < /dev/null & disown
 g "marking every block on the real network"
 
+# ── 5b. supervisor ────────────────────────────────────────────────────────────
+# Every outage so far had the same shape: a background process died or a wallet ran dry, and
+# nothing noticed until someone clicked a button and got a revert.
+step "5b. Supervisor"
+spid=$(pgrep -f "scripts/supervise.sh" | head -1 || true); [ -n "${spid:-}" ] && kill "$spid" 2>/dev/null
+setsid nohup ./scripts/supervise.sh > "$LOGS/supervise.log" 2>&1 < /dev/null & disown
+g "watching keeper, web, gas and feed every 60s"
+
 # ── 6. public URL ─────────────────────────────────────────────────────────────
 step "6. Public URL"
 tpid=$(pgrep -f "cloudflared tunnel" | head -1 || true); [ -n "${tpid:-}" ] && kill "$tpid" 2>/dev/null

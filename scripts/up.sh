@@ -99,6 +99,14 @@ for k, v in new.items():
         out.append(f"{k}={v}")
 open('.env', 'w').write('\n'.join(out))
 PY
+  # Point .env at the fork too. Deploying fork addresses while MONAD_TESTNET_RPC still names
+  # the public network leaves every tool reading a chain where those addresses have no code —
+  # and since both report chain id 10143, nothing catches it.
+  sed -i -E 's#^MONAD_TESTNET_RPC=.*#MONAD_TESTNET_RPC=http://127.0.0.1:8546#' .env
+  grep -q '^NEXT_PUBLIC_MONAD_RPC=' .env \
+    && sed -i -E 's#^NEXT_PUBLIC_MONAD_RPC=.*#NEXT_PUBLIC_MONAD_RPC=http://127.0.0.1:8546#' .env \
+    || echo 'NEXT_PUBLIC_MONAD_RPC=http://127.0.0.1:8546' >> .env
+
   set -a; . ./.env; set +a
   g "deployed · registry $MANDATE_REGISTRY_ADDRESS"
 fi
