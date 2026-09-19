@@ -19,7 +19,8 @@ const BASE = process.argv[2] ?? "http://127.0.0.1:3111";
 
 /** Pages to check, and a string each must contain once it has actually rendered. */
 const PAGES = [
-  {path: "/", mustContain: ["Distance to floor", "Equity vs drawdown"]},
+  {path: "/", mustContain: ["The rules are the contract", "A real breach, recorded on chain"]},
+  {path: "/trade", mustContain: ["Distance to floor", "Equity vs drawdown"]},
   {path: "/lp", mustContain: ["Capital pool", "What you are underwriting"]},
 ];
 

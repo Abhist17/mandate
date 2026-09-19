@@ -9,7 +9,7 @@ export function Nav() {
   const path = usePathname();
 
   const tabs = [
-    {href: "/", label: "Trader"},
+    {href: "/trade", label: "Trade"},
     {href: "/market", label: "Market"},
     {href: "/lp", label: "Liquidity"},
   ];

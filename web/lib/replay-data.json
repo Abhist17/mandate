@@ -1,0 +1,105 @@
+{
+  "capturedAt": "2026-09-19T15:06:52.296Z",
+  "allocation": 100000,
+  "maxDrawdownPct": 10,
+  "dailyLossPct": 5,
+  "splitPct": 80,
+  "enforcedBy": "a wallet with no role in the system",
+  "txHash": "0x60cdab6dded8e93de47cecfdb50e11e5c0ebf475b98c3fcdf8a75040bed64ae7",
+  "frames": [
+    {
+      "t": 0,
+      "price": 81612.7,
+      "equity": 99724.036449,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 4724.036449,
+      "headroomBps": 473,
+      "status": "active",
+      "label": "Funded. $100,000 under enforced terms."
+    },
+    {
+      "t": 1,
+      "price": 81123.0238,
+      "equity": 98744.684049,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 3744.684049,
+      "headroomBps": 379,
+      "status": "active"
+    },
+    {
+      "t": 2,
+      "price": 81367.8619,
+      "equity": 99234.360249,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 4234.360249,
+      "headroomBps": 426,
+      "status": "active"
+    },
+    {
+      "t": 3,
+      "price": 80633.3476,
+      "equity": 97765.331649,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 2765.331649,
+      "headroomBps": 282,
+      "status": "active",
+      "label": "Price moving against the position."
+    },
+    {
+      "t": 4,
+      "price": 80143.6714,
+      "equity": 96785.979249,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 1785.979249,
+      "headroomBps": 184,
+      "status": "active"
+    },
+    {
+      "t": 5,
+      "price": 80388.5095,
+      "equity": 97275.655449,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 2275.655449,
+      "headroomBps": 233,
+      "status": "active"
+    },
+    {
+      "t": 6,
+      "price": 79653.9952,
+      "equity": 95806.626849,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 806.626849,
+      "headroomBps": 84,
+      "status": "active",
+      "label": "Headroom shrinking — the floor does not move."
+    },
+    {
+      "t": 7,
+      "price": 79082.7063,
+      "equity": 94664.049049,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 0,
+      "headroomBps": 0,
+      "status": "breached"
+    },
+    {
+      "t": 8,
+      "price": 79082.7063,
+      "equity": 94412.644,
+      "floor": 95000,
+      "peak": 100000,
+      "headroom": 0,
+      "headroomBps": 0,
+      "status": "breached",
+      "label": "Enforced. Position flattened, capital returned — in one transaction, by a stranger."
+    }
+  ]
+}

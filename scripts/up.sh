@@ -59,6 +59,14 @@ fi
 step "2. Contracts"
 set -a; . ./.env; set +a
 
+# Fund the deployer ON THE FORK. Anvil pre-funds its own ten test accounts, not whichever
+# address .env happens to hold — and once .env carries a real deployer key for the live
+# network, every local run would otherwise fail with "out of gas" on a chain where gas is
+# free. anvil_setBalance is a local-only cheat and exactly the right one here.
+DEPLOYER_ADDR=$(cast wallet address --private-key "$PRIVATE_KEY")
+cast rpc anvil_setBalance "$DEPLOYER_ADDR" 0x21e19e0c9bab2400000 --rpc-url $RPC >/dev/null 2>&1 \
+  && i "funded $DEPLOYER_ADDR with 10,000 test MON on the fork"
+
 REGISTRY_LIVE=0
 if [ -n "${MANDATE_REGISTRY_ADDRESS:-}" ]; then
   code=$(cast code "$MANDATE_REGISTRY_ADDRESS" --rpc-url $RPC 2>/dev/null || echo 0x)
