@@ -170,6 +170,14 @@ g "http://localhost:3000"
 
 # ── 6. keeper ─────────────────────────────────────────────────────────────────
 step "6. Keeper"
+
+# The fork copies real testnet state, which includes the keeper wallet's real balance — and
+# on testnet that wallet is drained. So a local stack would come up looking healthy while the
+# keeper sat in a loop refusing to send transactions, no marks landed, and the equity chart
+# stayed empty with no indication why. Free money on a local chain; top it up unconditionally.
+cast rpc anvil_setBalance "$KEEPER_ADDRESS" 0x21E19E0C9BAB2400000 --rpc-url $RPC >/dev/null 2>&1 \
+  && i "keeper funded with 10,000 MON on the fork"
+
 kpid=$(pgrep -f "tsx keeper/src/index.ts" | head -1 || true)
 [ -n "${kpid:-}" ] && kill "$kpid" 2>/dev/null && sleep 1
 setsid nohup npx tsx keeper/src/index.ts > "$LOGS/keeper.log" 2>&1 < /dev/null &
