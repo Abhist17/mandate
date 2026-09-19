@@ -7,7 +7,7 @@ import {ClaimMandate} from "@/components/ClaimMandate";
 import {PayoutPanel} from "@/components/PayoutPanel";
 import {EnforceButton} from "@/components/EnforceButton";
 import {Onboarding} from "@/components/Onboarding";
-import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer, Skeleton} from "@/components/ui";
+import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer, Skeleton, Live} from "@/components/ui";
 import {fetchRelevantIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
 import {publicClient, ADDR, isConfigured, explorerAddr, BREACH_KIND} from "@/lib/chain";
@@ -332,13 +332,13 @@ function TraderDetail({
         <EnforceButton mandate={mandate} onDone={onDone} />
 
         {/* ── the answer ──────────────────────────────────────────────────── */}
-        <Panel>
+        <Panel className="rise">
           <div className="grid grid-cols-2 gap-6 p-5 md:grid-cols-4">
-            <Stat label="Equity" value={fmtUsd(mandate.liveEquity)} size="xl" />
+            <Stat label="Equity" value={<Live value={fmtUsd(mandate.liveEquity)} />} size="xl" />
             {/* The one number this screen exists for. Sized and lit accordingly. */}
             <Stat
               label="Distance to floor"
-              value={active ? fmtUsd(mandate.headroom) : "—"}
+              value={active ? <Live value={fmtUsd(mandate.headroom)} /> : "—"}
               sub={active ? `${fmtBps(mandate.headroomBps)} of equity` : BREACH_KIND[state.breachKind]}
               tone={tone as "up" | "down" | "warn" | "neutral"}
               size="hero"
@@ -346,7 +346,7 @@ function TraderDetail({
             />
             <Stat
               label="P&L vs allocation"
-              value={fmtSigned(pnl)}
+              value={<Live value={fmtSigned(pnl)} />}
               tone={pnl >= 0n ? "up" : "down"}
               size="lg"
             />
@@ -368,6 +368,7 @@ function TraderDetail({
 
         {/* ── the screen ──────────────────────────────────────────────────── */}
         <Panel
+          className="rise rise-1"
           title={`Equity vs drawdown floor — mandate #${mandate.id}`}
           right={
             <div className="flex items-center gap-3">

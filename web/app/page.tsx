@@ -18,7 +18,7 @@ export default function Landing() {
   return (
     <div className="mx-auto max-w-5xl space-y-10 py-4 sm:py-8">
       {/* ── the claim ──────────────────────────────────────────────────────── */}
-      <header className="space-y-5 text-center">
+      <header className="rise space-y-5 text-center">
         <p className="text-2xs uppercase tracking-[0.2em] text-txt-lo">
           Onchain prop firm · Monad
         </p>
@@ -36,7 +36,7 @@ export default function Landing() {
       </header>
 
       {/* ── show, don't tell ───────────────────────────────────────────────── */}
-      <section className="space-y-2">
+      <section className="rise rise-1 space-y-2">
         <Replay />
         <p className="px-1 text-center text-2xs text-txt-lo">
           Recorded from a real mandate on chain — not a mock-up. The transaction that enforced
@@ -45,7 +45,7 @@ export default function Landing() {
       </section>
 
       {/* ── what to do next ────────────────────────────────────────────────── */}
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className="rise rise-2 grid gap-3 sm:grid-cols-2">
         <Link
           href="/trade"
           className="group rounded-xl border border-up/25 bg-up/[0.05] p-5 transition-all hover:border-up/45 hover:bg-up/[0.08]"
@@ -69,7 +69,7 @@ export default function Landing() {
       </section>
 
       {/* ── the three claims, each checkable ───────────────────────────────── */}
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="rise rise-3 grid gap-3 sm:grid-cols-3">
         <Claim
           k="Every block"
           t="Marked against live prices"

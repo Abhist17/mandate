@@ -180,6 +180,7 @@ export default function MarketPage() {
       </Explainer>
 
       <Panel
+        className="rise rise-1"
         title="What capital is paying"
         right={<span className="text-2xs text-txt-lo">bubble size = record required</span>}
       >

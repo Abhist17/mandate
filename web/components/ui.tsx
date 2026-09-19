@@ -1,6 +1,6 @@
 "use client";
 
-import type {ReactNode} from "react";
+import {useEffect, useRef, useState, type ReactNode} from "react";
 
 export function Panel({
   title,
@@ -175,7 +175,7 @@ export function Empty({children}: {children: ReactNode}) {
  * "Loading…" as bare text is both less informative and more disruptive.
  */
 export function Skeleton({className = ""}: {className?: string}) {
-  return <div className={`animate-pulse rounded bg-white/[0.045] ${className}`} />;
+  return <div className={`shimmer rounded ${className}`} />;
 }
 
 export function SkeletonPanel({rows = 3, title}: {rows?: number; title?: string}) {
@@ -218,4 +218,29 @@ export function Signed({
       {format(magnitude)}
     </span>
   );
+}
+
+/**
+ * A number that tints briefly when it changes.
+ *
+ * On a screen refreshed every few seconds, a value can move without anyone noticing. The tint
+ * is short and fades to the normal colour — enough to catch that something moved, not enough
+ * to pull the eye off whatever you were reading.
+ */
+export function Live({value, className = ""}: {value: string; className?: string}) {
+  const prev = useRef(value);
+  const [cls, setCls] = useState("");
+
+  useEffect(() => {
+    if (prev.current === value) return;
+    const before = parseFloat(prev.current.replace(/[^0-9.-]/g, ""));
+    const after = parseFloat(value.replace(/[^0-9.-]/g, ""));
+    prev.current = value;
+    if (!Number.isFinite(before) || !Number.isFinite(after) || before === after) return;
+    setCls(after > before ? "flash-up" : "flash-down");
+    const t = setTimeout(() => setCls(""), 950);
+    return () => clearTimeout(t);
+  }, [value]);
+
+  return <span className={`${cls} ${className}`}>{value}</span>;
 }

@@ -70,7 +70,7 @@ export default function LpPage() {
 
   return (
     <div className="space-y-4">
-      <Panel title="Capital pool" right={<LiveDot />}>
+      <Panel title="Capital pool" right={<LiveDot />} className="rise">
         <div className="grid grid-cols-2 gap-6 p-5 md:grid-cols-5">
           <Stat label="Total value" value={fmtUsd(pool?.totalAssets)} size="xl" />
           <Stat label="Idle" value={fmtUsd(pool?.idle)} sub="available to allocate or withdraw" size="lg" />
@@ -87,6 +87,7 @@ export default function LpPage() {
       </Panel>
 
       <Panel
+        className="rise rise-1"
         title="Where the risk is"
         right={<span className="text-2xs text-txt-lo">distance to floor, worst first</span>}
       >
