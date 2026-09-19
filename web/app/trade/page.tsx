@@ -6,6 +6,8 @@ import {TradePanel} from "@/components/TradePanel";
 import {ClaimMandate} from "@/components/ClaimMandate";
 import {PayoutPanel} from "@/components/PayoutPanel";
 import {EnforceButton} from "@/components/EnforceButton";
+import {AccountHeader} from "@/components/AccountHeader";
+import {Objectives} from "@/components/Objectives";
 import {Onboarding} from "@/components/Onboarding";
 import {Panel, Stat, StatusPill, HeadroomBar, Field, LiveDot, Empty, Explainer, Skeleton, Live} from "@/components/ui";
 import {fetchRelevantIds, fetchMandate, usePolled, type Mandate} from "@/lib/data";
@@ -142,9 +144,9 @@ export default function TraderPage() {
 
   return (
     <div className="space-y-4">
-      <Onboarding mandates={mandates} />
       <MandateStrip mandates={mandates} selected={selected} onSelect={setSelected} />
       <ClaimBanner mandates={mandates} onClaimed={setSelected} />
+      <Onboarding mandates={mandates} />
       {mandate && (
         <TraderDetail
           mandate={mandate}
@@ -331,44 +333,14 @@ function TraderDetail({
       <div className="space-y-4">
         <EnforceButton mandate={mandate} onDone={onDone} />
 
-        {/* ── the answer ──────────────────────────────────────────────────── */}
-        <Panel className="rise">
-          <div className="grid grid-cols-2 gap-6 p-5 md:grid-cols-4">
-            <Stat label="Equity" value={<Live value={fmtUsd(mandate.liveEquity)} />} size="xl" />
-            {/* The one number this screen exists for. Sized and lit accordingly. */}
-            <Stat
-              label="Distance to floor"
-              value={active ? <Live value={fmtUsd(mandate.headroom)} /> : "—"}
-              sub={active ? `${fmtBps(mandate.headroomBps)} of equity` : BREACH_KIND[state.breachKind]}
-              tone={tone as "up" | "down" | "warn" | "neutral"}
-              size="hero"
-              emphasis={active}
-            />
-            <Stat
-              label="P&L vs allocation"
-              value={<Live value={fmtSigned(pnl)} />}
-              tone={pnl >= 0n ? "up" : "down"}
-              size="lg"
-            />
-            <Stat
-              label="Floor"
-              value={fmtUsd(mandate.floor)}
-              sub={`peak ${fmtUsd(state.highWaterMark)}`}
-              size="lg"
-            />
-          </div>
-          <div className="border-t border-edge px-5 py-4">
-            <HeadroomBar
-              equity={toNum(mandate.liveEquity)}
-              floor={toNum(mandate.floor)}
-              peak={toNum(state.highWaterMark)}
-            />
-          </div>
-        </Panel>
+        <AccountHeader mandate={mandate} />
 
-        {/* ── the screen ──────────────────────────────────────────────────── */}
+        {/* Objectives sit directly under the account strip, which is where a funded trader
+            looks first — it is the panel that answers "am I still inside the rules". */}
+        <Objectives mandate={mandate} />
+
         <Panel
-          className="rise rise-1"
+          className="rise rise-2"
           title={`Equity vs drawdown floor — mandate #${mandate.id}`}
           right={
             <div className="flex items-center gap-3">
@@ -406,28 +378,16 @@ function TraderDetail({
 
       {/* ── side rail ─────────────────────────────────────────────────────── */}
       <div className="space-y-4">
-        <Panel title="Mandate terms" right={<StatusPill status={state.status} />}>
+        <Panel className="rise rise-1" title="Terms" right={<StatusPill status={state.status} />}>
           <div className="divide-y divide-edge px-4 py-1">
-            <Field label="Allocation" value={fmtUsd(terms.allocation)} />
-            <Field
-              label="Max drawdown"
-              value={`${fmtPct(terms.maxDrawdownBps)} ${DRAWDOWN_MODE[terms.drawdownMode] ?? ""}`}
-            />
-            <Field label="Daily loss limit" value={fmtPct(terms.dailyLossBps)} />
-            <Field label="Position cap" value={`${terms.maxPositionBps / 10000}x`} />
+            {/* Only what the account strip and the objectives rows do not already say. */}
             <Field label="Profit split" value={`${fmtPct(terms.profitSplitBps)} to trader`} />
-            {terms.maxConsistencyBps > 0 && (
-              <Field label="Consistency rule" value={`max ${fmtPct(terms.maxConsistencyBps)}`} />
-            )}
-            {terms.minProfitableDays > 0 && (
-              <Field label="Min profitable days" value={String(terms.minProfitableDays)} />
-            )}
             <Field label="Daily reset" value={`${String(terms.resetHourUtc).padStart(2, "0")}:00 UTC`} />
             <Field label="Floor touch" value={terms.touchIsBreach ? "breaches" : "survives"} />
             <Field label="Expires" value={fmtCountdown(terms.expiry)} />
           </div>
-          <div className="border-t border-edge px-4 py-2.5 text-2xs text-txt-lo">
-            Fixed at issuance. There is no function to change them.
+          <div className="border-t border-edge px-4 py-2.5 text-2xs leading-relaxed text-txt-lo">
+            Fixed at issuance. There is no function to change them — not for us either.
           </div>
         </Panel>
 

@@ -52,6 +52,10 @@ export type Mandate = {
   consistencyBps: bigint;
   payoutOk: boolean;
   payoutBlock: number; // 0 None, 1 Consistency, 2 ProfitableDays, 3 Cushion
+  /** Equity less floating PnL. Prop firms show balance and equity separately and traders
+   *  read the gap between them as "what is still at risk on open positions". */
+  balance: bigint;
+  floatingPnl: bigint;
 };
 
 export type Position = {
@@ -213,13 +217,18 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
   const [headroom, headroomBps] = headroomTuple as readonly [bigint, bigint];
 
   // The consistency score and payout verdict — the numbers a prop firm computes in private.
-  const [consistencyBps, eligibility] = await Promise.all([
+  const [consistencyBps, eligibility, floatingPnl] = await Promise.all([
     publicClient.readContract({
       address: ADDR.registry, abi: registryAbi, functionName: "consistencyScore", args: [id],
     }) as Promise<bigint>,
     publicClient.readContract({
       address: ADDR.registry, abi: registryAbi, functionName: "payoutEligibility", args: [id],
     }) as Promise<readonly [boolean, number]>,
+    isActive
+      ? (publicClient
+          .readContract({address: state.account, abi: accountAbi, functionName: "floatingPnl"})
+          .catch(() => 0n) as Promise<bigint>)
+      : Promise.resolve(0n),
   ]);
 
   return {
@@ -227,6 +236,8 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
     consistencyBps,
     payoutOk: eligibility[0],
     payoutBlock: Number(eligibility[1]),
+    balance: liveEquity - floatingPnl,
+    floatingPnl,
   };
 }
 

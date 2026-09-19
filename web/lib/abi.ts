@@ -329,6 +329,7 @@ export const accountAbi = [
   {type: "function", name: "equity", inputs: [], outputs: [{type: "uint256"}], stateMutability: "view"},
   {type: "function", name: "notional", inputs: [], outputs: [{type: "uint256"}], stateMutability: "view"},
   {type: "function", name: "trader", inputs: [], outputs: [{type: "address"}], stateMutability: "view"},
+  {type: "function", name: "floatingPnl", inputs: [], outputs: [{type: "int256"}], stateMutability: "view"},
 ] as const;
 
 export const venueExtraAbi = [

@@ -100,6 +100,19 @@ this is the first chain where building it is economically possible.**
 A **mandate** is an allocation of pooled capital plus enforceable constraints on how it's
 used, legible to both sides before either commits:
 
+### The dashboard is the authoritative one
+
+FundingPips' own help page says their dashboard *"is for informational purposes only and is
+not a live representation of performance."* The screen a funded trader checks to see whether
+they are about to breach is **not** the thing that decides whether they breached. You can be
+closed out by a number you were never shown.
+
+Mandate's **Trading Objectives** panel is the same shape every prop firm uses — one row per
+rule, allowance spent, pass or fail — and every figure on it is read from the contract that
+does the enforcing, through the same functions `markAndEnforce` calls. Each row names the
+function that produced it. This dashboard *cannot* disagree with the thing that closes your
+account, because it is reading the thing that closes your account.
+
 **Risk terms** — checked pre-trade, and again on every block:
 
 | Term | Meaning |
