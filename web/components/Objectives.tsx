@@ -32,6 +32,15 @@ type Row = {
   applies: boolean;
   source: string;
   note?: string;
+  /**
+   * Which consequence this rule carries. Prop firms separate these on their objectives
+   * pages and the separation is the useful part: breaking a limit ends the account, while
+   * missing a condition only holds up the withdrawal. Listing both as one undifferentiated
+   * checklist makes every row look equally fatal, and then none of them reads as urgent.
+   */
+  group: "limit" | "condition";
+  /** True when this is the rule currently setting the effective floor. */
+  binding?: boolean;
 };
 
 export function Objectives({mandate}: {mandate: Mandate}) {
@@ -46,8 +55,17 @@ export function Objectives({mandate}: {mandate: Mandate}) {
   const notional = toNum(mandate.notional);
 
   // ── daily loss ──────────────────────────────────────────────────────────────
-  const dailyAllowance = (dayStart * terms.dailyLossBps) / 10_000;
-  const dailyUsed = Math.max(0, dayStart - equity);
+  // Measured from the higher of day-start balance and day-start equity, because that is
+  // what RiskEngine.dailyFloorFromBasis does. Measuring from equity alone — which this
+  // panel used to do — quietly forgives an overnight floating loss, and the error is not
+  // small: on a mandate carrying a loser through the reset it reported 1% of the daily
+  // allowance spent while the contract had it at 89%. A trader reading that number would
+  // have believed they had room they did not have, which is the precise failure this
+  // panel exists to rule out.
+  const dayStartBasis = Math.max(toNum(state.dayStartBalance), dayStart);
+  const dailyAllowance = (dayStartBasis * terms.dailyLossBps) / 10_000;
+  const dailyUsed = Math.max(0, dayStartBasis - equity);
+  const dailyFloor = (dayStartBasis * (10_000 - terms.dailyLossBps)) / 10_000;
 
   // ── drawdown ────────────────────────────────────────────────────────────────
   // Measured from whatever this mandate's mode measures from: the peak for trailing, the
@@ -57,6 +75,11 @@ export function Objectives({mandate}: {mandate: Mandate}) {
   const ddAllowance = (ddBase * terms.maxDrawdownBps) / 10_000;
   const ddUsed = Math.max(0, ddBase - equity);
 
+  // Two floors exist at once and only the higher one is live. Saying which is binding is
+  // the difference between a list of rules and an answer to "what is about to close me".
+  const ddFloor = ddBase - ddAllowance;
+  const binding: "daily" | "drawdown" = dailyFloor >= ddFloor ? "daily" : "drawdown";
+
   // ── position cap ────────────────────────────────────────────────────────────
   const capLimit = (allocation * terms.maxPositionBps) / 10_000;
 
@@ -64,7 +87,7 @@ export function Objectives({mandate}: {mandate: Mandate}) {
   const consistency = Number(mandate.consistencyBps) / 100;
   const consistencyMax = terms.maxConsistencyBps / 100;
 
-  const rows: Row[] = [
+  const rows: Row[] = ([
     {
       label: "Max daily loss",
       used: dailyAllowance > 0 ? dailyUsed / dailyAllowance : 0,
@@ -73,7 +96,9 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       ok: dailyUsed < dailyAllowance,
       applies: true,
       source: "floorOf()",
-      note: `${fmtPct(terms.dailyLossBps)} of day-start equity · resets ${String(terms.resetHourUtc).padStart(2, "0")}:00 UTC`,
+      group: "limit",
+      binding: binding === "daily",
+      note: `${fmtPct(terms.dailyLossBps)} of ${toNum(state.dayStartBalance) > dayStart ? "day-start balance" : "day-start equity"} · resets ${String(terms.resetHourUtc).padStart(2, "0")}:00 UTC`,
     },
     {
       label: "Max drawdown",
@@ -83,6 +108,8 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       ok: equity >= floor,
       applies: true,
       source: "floorOf()",
+      group: "limit",
+      binding: binding === "drawdown",
       note:
         terms.drawdownMode === 0
           ? `${fmtPct(terms.maxDrawdownBps)} static — measured from the allocation, never moves`
@@ -98,6 +125,7 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       ok: notional <= capLimit * 1.01,
       applies: true,
       source: "openPosition()",
+      group: "limit",
       note: `${terms.maxPositionBps / 10_000}x allocation · checked before every fill`,
     },
     {
@@ -108,6 +136,7 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       ok: consistency <= consistencyMax,
       applies: terms.maxConsistencyBps > 0,
       source: "consistencyScore()",
+      group: "condition",
       note: "biggest winning day ÷ total profit · gates the payout, not the account",
     },
     {
@@ -118,9 +147,10 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       ok: state.profitableDays >= terms.minProfitableDays,
       applies: terms.minProfitableDays > 0,
       source: "recordOf()",
+      group: "condition",
       note: `${state.tradingDays} trading day${state.tradingDays === 1 ? "" : "s"} completed`,
     },
-  ].filter((r) => r.applies);
+  ] satisfies Row[]).filter((r) => r.applies);
 
   const failing = rows.filter((r) => !r.ok).length;
 
@@ -141,11 +171,33 @@ export function Objectives({mandate}: {mandate: Mandate}) {
         </span>
       </header>
 
-      <div className="divide-y divide-edge/60">
-        {rows.map((r) => (
-          <ObjectiveRow key={r.label} row={r} dimmed={!active} />
-        ))}
-      </div>
+      <Group
+        label="Limits"
+        caption="break one and the contract closes the account"
+        tone="down"
+        rows={rows.filter((r) => r.group === "limit")}
+        dimmed={!active}
+      />
+      <Group
+        label="Conditions"
+        caption="these gate the payout, not the account"
+        tone="acc"
+        rows={rows.filter((r) => r.group === "condition")}
+        dimmed={!active}
+      />
+
+      {/* The panel re-derives the floor from the terms; the contract computes its own. If
+          the two ever part company, the honest thing is to say so on the screen rather than
+          let a trader act on a number we got wrong — the whole claim here is that this
+          cannot disagree with the enforcer, and a claim like that needs a tripwire. */}
+      {active && Math.abs(Math.max(dailyFloor, ddFloor) - floor) > 0.01 && (
+        <div className="border-t border-edge bg-down/[0.06] px-4 py-2.5 text-2xs leading-relaxed text-down">
+          This panel derives a floor of{" "}
+          <span className="num">{fmtUsd(BigInt(Math.round(Math.max(dailyFloor, ddFloor) * 1e6)))}</span>{" "}
+          but the contract reports <span className="num">{fmtUsd(mandate.floor)}</span>. Trust the
+          contract — it is the one that closes the account. Please report this.
+        </div>
+      )}
 
       <footer className="border-t border-edge px-4 py-2.5">
         <p className="text-2xs leading-relaxed text-txt-lo">
@@ -168,6 +220,41 @@ export function Objectives({mandate}: {mandate: Mandate}) {
   );
 }
 
+function Group({
+  label,
+  caption,
+  tone,
+  rows,
+  dimmed,
+}: {
+  label: string;
+  caption: string;
+  tone: "down" | "acc";
+  rows: Row[];
+  dimmed: boolean;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <div className="flex flex-wrap items-baseline gap-x-2 border-y border-edge bg-ink-950/60 px-4 py-2">
+        <span
+          className={`text-2xs font-semibold uppercase tracking-[0.14em] ${
+            tone === "down" ? "text-down/80" : "text-acc-hi/80"
+          }`}
+        >
+          {label}
+        </span>
+        <span className="text-2xs text-txt-lo">— {caption}</span>
+      </div>
+      <div className="divide-y divide-edge/60">
+        {rows.map((r) => (
+          <ObjectiveRow key={r.label} row={r} dimmed={dimmed} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 function ObjectiveRow({row, dimmed}: {row: Row; dimmed: boolean}) {
   const pct = Math.max(0, Math.min(100, row.used * 100));
   // Amber from 70% of the allowance: a rule you are three-quarters through is worth seeing
@@ -186,6 +273,14 @@ function ObjectiveRow({row, dimmed}: {row: Row; dimmed: boolean}) {
             {row.ok ? "✓" : "✕"}
           </span>
           <span className="text-xs font-medium text-txt-hi">{row.label}</span>
+          {row.binding && (
+            <span
+              className="rounded border border-warn/30 bg-warn/10 px-1.5 py-px text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-warn"
+              title="Two floors apply at once and only the higher one is live. This is the one currently setting your floor."
+            >
+              Binding
+            </span>
+          )}
         </div>
         <div className="num flex items-baseline gap-1.5 text-xs">
           <span className={textTone}>{row.usedLabel}</span>

@@ -4,6 +4,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Customized,
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
@@ -39,6 +40,10 @@ type Props = {
   allocation: number;
   breached?: boolean;
   height?: number;
+  /** Draw the labelled constraint lines across the plot. */
+  objectiveLines?: boolean;
+  /** Absolute dollars, or percent of the starting allocation. */
+  unit?: "abs" | "pct";
 };
 
 const fmtMoney = (v: number) =>
@@ -102,7 +107,92 @@ function Row({label, value, className}: {label: string; value: string; className
   );
 }
 
-export function EquityChart({points, allocation, breached, height = 340}: Props) {
+/**
+ * A value pinned to its line, the way every trading terminal marks a price.
+ *
+ * Reading a constraint off a y-axis means finding the line, tracing it left, and
+ * interpolating between two ticks — three operations to answer "where is my floor right
+ * now". The chip answers it in place. Prop-firm dashboards all do this because the numbers
+ * on these particular lines are the rules of the account, not decoration.
+ */
+type TagSpec = {value: number; text: string; fill: string; color: string};
+
+/**
+ * Draws the value chips against the chart's own y-scale.
+ *
+ * Recharts' own `label` slot was the obvious route and it does not work here: on a
+ * `ReferenceLine` the injected viewBox is the whole plot area, so every chip landed at the
+ * top of the chart rather than on its line, and a zero-radius `ReferenceDot` is skipped
+ * before its label is ever rendered. Reading the scale out of the chart and positioning the
+ * chips directly is both shorter and exact.
+ */
+function Tags({
+  specs,
+  ...chart
+}: {
+  specs: TagSpec[];
+  yAxisMap?: Record<string, {scale: (v: number) => number}>;
+  offset?: {left?: number; top?: number; width?: number; height?: number};
+}) {
+  const axis = Object.values(chart.yAxisMap ?? {})[0];
+  const off = chart.offset ?? {};
+  if (!axis?.scale || off.left === undefined || off.width === undefined) return null;
+
+  const right = off.left + off.width;
+  const top = off.top ?? 0;
+  const bottom = top + (off.height ?? 0);
+
+  // Chips are nudged apart when two lines nearly coincide, so a floor sitting just under
+  // equity does not print one label on top of the other.
+  const placed: number[] = [];
+  const settle = (y: number) => {
+    let v = Math.max(top + 8, Math.min(bottom - 8, y));
+    while (placed.some((p) => Math.abs(p - v) < 16)) v += 16;
+    placed.push(v);
+    return v;
+  };
+
+  return (
+    <g style={{pointerEvents: "none"}}>
+      {specs.map((s) => {
+        const raw = axis.scale(s.value);
+        // The axis is scaled to the equity-and-floor band, so a reference far above it —
+        // a starting allocation the account is well below, an old peak — has no position
+        // on this plot. Parking its chip at the edge unmarked would put a number beside a
+        // gridline it does not belong to, so the caret says "off the top of this view".
+        const off = raw < top ? "▲ " : raw > bottom ? "▼ " : "";
+        const y = settle(raw);
+        const text = off + s.text;
+        const w = text.length * 5.55 + 13;
+        return (
+          <g key={s.text + s.fill} opacity={off ? 0.55 : 1}>
+            <rect x={right + 6} y={y - 7.5} width={w} height={15} rx={3.5} fill={s.fill} />
+            <text
+              x={right + 6 + w / 2}
+              y={y + 3.5}
+              textAnchor="middle"
+              fontSize={9.5}
+              fontWeight={600}
+              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              fill={s.color}
+            >
+              {text}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+export function EquityChart({
+  points,
+  allocation,
+  breached,
+  height = 340,
+  objectiveLines = true,
+  unit = "abs",
+}: Props) {
   if (points.length === 0) {
     return (
       <div
@@ -119,10 +209,23 @@ export function EquityChart({points, allocation, breached, height = 340}: Props)
 
   // Bound the axis to the region that carries the decision, with padding so neither the
   // equity line nor the floor ever sits flush against an edge.
-  const lows = points.map((p) => Math.min(p.equity, p.floor));
-  const highs = points.map((p) => Math.max(p.equity, p.highWaterMark));
-  const lo = Math.min(...lows, allocation);
-  const hi = Math.max(...highs, allocation);
+  //
+  // The high-water mark is deliberately NOT allowed to set the top. On an account that has
+  // given back a run-up, the peak can sit thousands above current equity, and including it
+  // compressed the entire equity-to-floor band — the one thing this chart is for — into the
+  // bottom tenth of the plot. The peak is context; it gets in only if it fits.
+  const lo = Math.min(...points.map((p) => Math.min(p.equity, p.floor)));
+  const core = Math.max(...points.map((p) => Math.max(p.equity, p.floor)));
+  const peak = Math.max(...points.map((p) => p.highWaterMark));
+  // A minimum band, so an account that has barely moved does not get an axis zoomed to
+  // its own rounding noise.
+  const band = Math.max(core - lo, core * 0.004);
+  // A reference above the data earns a place on the axis only if it nearly fits already.
+  // Otherwise the top is the data's own top: stretching to *almost* reach a line that is
+  // still off-screen buys empty plot and no information.
+  const ceiling = core + band * 0.35;
+  const refs = Math.max(allocation, peak);
+  const hi = refs <= ceiling ? Math.max(core, refs) : core;
   const pad = Math.max((hi - lo) * 0.12, hi * 0.002);
 
   const last = points[points.length - 1]!;
@@ -130,9 +233,22 @@ export function EquityChart({points, allocation, breached, height = 340}: Props)
   const span = last.t - points[0]!.t;
   const fmtTick = tickFormatter(span);
 
+  // Percent mode reads against the capital that was actually issued, so the start line sits
+  // at 0 and a -3% daily limit is -3% on the axis. Expressing it as a percent of *current*
+  // equity would move the rules around as the account moves, which is the opposite of what
+  // a fixed constraint is.
+  const asPct = (v: number) => (allocation > 0 ? (v / allocation - 1) * 100 : 0);
+  const fmtAxis =
+    unit === "pct" ? (v: number) => `${asPct(v) >= 0 ? "+" : ""}${asPct(v).toFixed(1)}%` : fmtMoney;
+  const fmtTagVal = (v: number) =>
+    unit === "pct" ? `${asPct(v) >= 0 ? "+" : ""}${asPct(v).toFixed(2)}%` : fmtMoney(v);
+
+  // Room on the right for the pinned value chips.
+  const rightPad = objectiveLines ? 92 : 16;
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={points} margin={{top: 12, right: 16, bottom: 0, left: 8}}>
+      <AreaChart data={points} margin={{top: 14, right: rightPad, bottom: 0, left: 8}}>
         <defs>
           {/* The headroom band: bright where it meets the equity line, fading toward the
               floor. Brighter than a normal area fill on purpose — this gap is the product. */}
@@ -169,7 +285,11 @@ export function EquityChart({points, allocation, breached, height = 340}: Props)
         />
         <YAxis
           domain={[lo - pad, hi + pad]}
-          tickFormatter={fmtMoney}
+          // Without this recharts widens the domain back out to fit every series, which
+          // hands the high-water-mark line the top of the axis and flattens the equity band
+          // it was bounded to protect. The peak clips instead, and its chip says so.
+          allowDataOverflow
+          tickFormatter={fmtAxis}
           stroke="#2a3140"
           tick={{fill: "#646d7e", fontSize: 10.5, fontFamily: "ui-monospace"}}
           tickLine={false}
@@ -232,8 +352,8 @@ export function EquityChart({points, allocation, breached, height = 340}: Props)
           name="High-water mark"
         />
 
-        {/* Where the mandate started. Quiet — it is context, not a constraint. */}
-        <ReferenceLine y={allocation} stroke="#252c3a" strokeDasharray="3 5" />
+        {/* Where the mandate started. The one genuinely flat line on the chart. */}
+        <ReferenceLine y={allocation} stroke="#39415280" strokeDasharray="3 5" />
 
         {/* The live value, so the eye lands on "now" without hunting the right edge. */}
         <ReferenceDot
@@ -245,6 +365,44 @@ export function EquityChart({points, allocation, breached, height = 340}: Props)
           strokeWidth={2}
           isFront
         />
+
+        {/* Current value of each line, pinned level with the line itself. Floor and peak
+            both move — a trailing drawdown is not a flat rule — so these read off the live
+            series rather than being drawn as horizontals that would claim otherwise. */}
+        {objectiveLines && (
+          <Customized
+            component={(props: object) => (
+              <Tags
+                {...props}
+                specs={[
+                  {
+                    value: last.equity,
+                    text: fmtTagVal(last.equity),
+                    fill: healthy ? "#00e39b" : "#ff3d55",
+                    color: "#04120c",
+                  },
+                  {value: last.floor, text: fmtTagVal(last.floor), fill: "#ff3d55", color: "#ffffff"},
+                  {
+                    value: allocation,
+                    text: unit === "pct" ? "0.00%" : fmtMoney(allocation),
+                    fill: "#e8ebf2",
+                    color: "#0b0d13",
+                  },
+                  ...(last.highWaterMark > last.equity
+                    ? [
+                        {
+                          value: last.highWaterMark,
+                          text: fmtTagVal(last.highWaterMark),
+                          fill: "#2a3140",
+                          color: "#c9d1e0",
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            )}
+          />
+        )}
 
         {breached && (
           <ReferenceLine

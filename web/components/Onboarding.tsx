@@ -102,15 +102,69 @@ export function Onboarding({mandates}: {mandates: Mandate[]}) {
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-edge bg-gradient-to-b from-ink-850 to-ink-900 shadow-panel-lg">
-      <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-txt-hi">
-            Start here
-          </h2>
-          <span className="num text-2xs text-txt-lo">
-            {doneCount} of {steps.length}
-          </span>
-        </div>
+      {/* One strip, not a checklist.
+          Stacked as five rows this pushed the account numbers and the equity curve below
+          the fold on a laptop — onboarding outranking the product on the product's own
+          screen. Only the step you are on has anything to say, so only it gets room. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-5">
+        <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo">
+          Start here
+        </span>
+
+        <ol className="flex items-center gap-1.5" aria-label={`Step ${current?.n ?? doneCount} of ${steps.length}`}>
+          {steps.map((s) => (
+            <li
+              key={s.n}
+              title={s.title}
+              className={`flex h-5 w-5 items-center justify-center rounded-full border text-[0.6rem] font-semibold ${
+                s.done
+                  ? "border-up/40 bg-up/15 text-up"
+                  : current?.n === s.n
+                    ? "border-acc bg-acc text-white"
+                    : "border-edge bg-ink-950 text-txt-lo"
+              }`}
+            >
+              {s.done ? "\u2713" : s.n}
+            </li>
+          ))}
+        </ol>
+
+        {/* Full width on a phone: sharing a flex line with the pips and the button left
+            this a column three characters wide. */}
+        {current && (
+          <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+            <div className="text-xs font-medium text-txt-hi">{current.title}</div>
+            <p className="mt-0.5 line-clamp-2 text-2xs leading-relaxed text-txt-mid">
+              {current.body}
+            </p>
+          </div>
+        )}
+
+        {current?.action && (
+          <div className="shrink-0">
+            {current.action.href ? (
+              current.action.external ? (
+                <a
+                  href={current.action.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-up whitespace-nowrap"
+                >
+                  {current.action.label}
+                </a>
+              ) : (
+                <Link href={current.action.href} className="btn btn-up whitespace-nowrap">
+                  {current.action.label}
+                </Link>
+              )
+            ) : (
+              <button onClick={current.action.onClick} className="btn btn-up whitespace-nowrap">
+                {current.action.label}
+              </button>
+            )}
+          </div>
+        )}
+
         <button
           onClick={() => {
             setDismissed(true);
@@ -120,90 +174,18 @@ export function Onboarding({mandates}: {mandates: Mandate[]}) {
               /* private window — dismissal just won't persist */
             }
           }}
-          className="text-2xs text-txt-lo transition-colors hover:text-txt-hi"
+          className="shrink-0 text-2xs text-txt-lo transition-colors hover:text-txt-hi"
         >
           dismiss
         </button>
       </div>
 
-      {/* Progress rail */}
       <div className="h-0.5 w-full bg-ink-800">
         <div
           className="h-full bg-up transition-all duration-700 ease-out"
           style={{width: `${(doneCount / steps.length) * 100}%`}}
         />
       </div>
-
-      <ol className="divide-y divide-edge">
-        {steps.map((s) => {
-          const isCurrent = current?.n === s.n;
-          return (
-            <li
-              key={s.n}
-              className={`flex gap-4 px-5 transition-colors ${
-                isCurrent ? "bg-white/[0.02] py-3.5" : "py-2.5"
-              }`}
-            >
-              <div
-                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-2xs font-semibold ${
-                  s.done
-                    ? "border-up/40 bg-up/15 text-up"
-                    : isCurrent
-                      ? "border-edge-hi bg-ink-800 text-txt-hi"
-                      : "border-edge bg-ink-950 text-txt-lo"
-                }`}
-              >
-                {s.done ? "✓" : s.n}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div
-                  className={`text-xs font-medium ${
-                    s.done
-                      ? "text-txt-mid line-through decoration-txt-lo/50"
-                      : isCurrent
-                        ? "text-txt-hi"
-                        : "text-txt-mid"
-                  }`}
-                >
-                  {s.title}
-                </div>
-                {/* Only the step you are on explains itself. Showing all five at once buried
-                    the rest of the page below the fold and gave a reader five things to
-                    read when they need one. */}
-                {isCurrent && (
-                  <p className="mt-1 text-2xs leading-relaxed text-txt-mid">{s.body}</p>
-                )}
-              </div>
-
-              {s.action && isCurrent && (
-                <div className="shrink-0 self-center">
-                  {s.action.href ? (
-                    s.action.external ? (
-                      <a
-                        href={s.action.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-up whitespace-nowrap"
-                      >
-                        {s.action.label}
-                      </a>
-                    ) : (
-                      <Link href={s.action.href} className="btn btn-up whitespace-nowrap">
-                        {s.action.label}
-                      </Link>
-                    )
-                  ) : (
-                    <button onClick={s.action.onClick} className="btn btn-up whitespace-nowrap">
-                      {s.action.label}
-                    </button>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ol>
 
       {!hasDemoIssuer && (
         <div className="border-t border-edge px-5 py-2.5 text-2xs text-txt-lo">

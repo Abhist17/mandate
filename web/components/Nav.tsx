@@ -22,7 +22,10 @@ export function Nav() {
           <span className="hidden text-2xs text-txt-lo lg:inline">the rules are the contract</span>
         </Link>
 
-        <div className="flex gap-1">
+        {/* On a wide screen these live in the sidebar; duplicating them here would be two
+            navigations for one set of destinations. Below lg there is no sidebar, so they
+            come back. */}
+        <div className="flex gap-1 lg:hidden">
           {tabs.map((t) => {
             const active = path === t.href;
             return (

@@ -28,6 +28,15 @@ export default {
         down: "#ff3d55",
         warn: "#ffb43a",
         floor: "#ff3d55",
+        // The one interactive colour. Green and red are reserved for what the money is
+        // doing, so neither can double as "this is a button" without saying something
+        // about P&L that is not true. Every prop firm dashboard solves it the same way:
+        // one saturated brand colour that never appears on a number.
+        acc: {
+          DEFAULT: "#2f7dfb",
+          hi: "#5195ff",
+          dim: "#1b53ad",
+        },
       },
       fontFamily: {
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
