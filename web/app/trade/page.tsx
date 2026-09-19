@@ -12,6 +12,7 @@ import {MandateCard} from "@/components/MandateCard";
 import {Objectives} from "@/components/Objectives";
 import {Onboarding} from "@/components/Onboarding";
 import {Crumb} from "@/components/Crumb";
+import {TradeHistory} from "@/components/TradeHistory";
 import {Panel, Empty, Skeleton} from "@/components/ui";
 import {useMandates} from "@/lib/useMandates";
 import {fetchEquityCurve, type EquityPoint} from "@/lib/history";
@@ -135,6 +136,8 @@ function Detail({mandate}: {mandate: Mandate}) {
           <Objectives mandate={mandate} />
 
           <Positions mandate={mandate} />
+
+          <TradeHistory account={mandate.state.account} />
         </div>
 
         {/* ── side rail ─────────────────────────────────────────────────────── */}

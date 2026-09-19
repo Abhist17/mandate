@@ -53,8 +53,18 @@ export function MandatesProvider({children}: {children: ReactNode}) {
     [address],
   );
 
-  // Open on your own mandate if you have one; otherwise on whichever is closest to its
-  // floor, because that is the one worth watching.
+  // A shared link names its mandate. Honouring it before anything else is the whole point
+  // of the share button: someone opening the link has to land on the account they were
+  // sent, not on whichever one this browser would have picked for itself.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const want = new URLSearchParams(window.location.search).get("m");
+    if (!want || !/^\d+$/.test(want)) return;
+    setSelected((cur) => cur ?? BigInt(want));
+  }, []);
+
+  // Otherwise open on your own mandate if you have one, and failing that on whichever is
+  // closest to its floor, because that is the one worth watching.
   useEffect(() => {
     if (selected !== undefined || !mandates || mandates.length === 0) return;
     const active = mandates.filter((m) => m.state.status === 1);

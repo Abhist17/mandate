@@ -1,7 +1,8 @@
 "use client";
 
 import {parseAbiItem, type Address} from "viem";
-import {publicClient, ADDR} from "./chain";
+import {ADDR} from "./chain";
+import {walkLogs} from "./logs";
 
 /**
  * Equity curve history.
@@ -43,21 +44,11 @@ const equityMarkedEvent = parseAbiItem(
 );
 
 /**
- * Monad's public RPC rejects any eth_getLogs span wider than this. Verified against
- * https://testnet-rpc.monad.xyz — a 1000-block request errors with
- * "eth_getLogs is limited to a 100 range".
- */
-const RPC_MAX_LOG_SPAN = 100n;
-
-/**
  * How many windows to walk back. 40 x 100 blocks is ~4000 blocks, roughly 25 minutes at
  * 400ms — enough to render a meaningful curve without firing hundreds of requests from a
  * browser. Envio removes the limit entirely.
  */
 const FALLBACK_WINDOWS = 40n;
-
-/** Windows fetched at once. Enough to be quick, few enough not to trip rate limits. */
-const CONCURRENCY = 6;
 
 type EnvioRow = {
   markedAt: string;
@@ -109,57 +100,28 @@ async function fromEnvio(mandateId: bigint): Promise<EquityPoint[] | undefined> 
 }
 
 async function fromRpc(mandateId: bigint): Promise<EquityPoint[]> {
-  const head = await publicClient.getBlockNumber();
-  const span = RPC_MAX_LOG_SPAN * FALLBACK_WINDOWS;
-  const earliest = head > span ? head - span : 0n;
+  const logs = await walkLogs({
+    address: ADDR.registry as Address,
+    event: equityMarkedEvent,
+    args: {mandateId},
+    windows: FALLBACK_WINDOWS,
+  });
 
-  // Build the 100-block windows up front so they can be fetched a few at a time.
-  const windows: {from: bigint; to: bigint}[] = [];
-  for (let to = head; to > earliest; ) {
-    const from = to > earliest + RPC_MAX_LOG_SPAN ? to - RPC_MAX_LOG_SPAN + 1n : earliest;
-    windows.push({from, to});
-    if (from === earliest) break;
-    to = from - 1n;
-  }
-
-  const collected: EquityPoint[] = [];
-  for (let i = 0; i < windows.length; i += CONCURRENCY) {
-    const slice = windows.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(
-      slice.map((w) =>
-        publicClient
-          .getLogs({
-            address: ADDR.registry as Address,
-            event: equityMarkedEvent,
-            args: {mandateId},
-            fromBlock: w.from,
-            toBlock: w.to,
-          })
-          // A single failed window must not lose the whole curve.
-          .catch(() => []),
-      ),
-    );
-    for (const logs of results) {
-      for (const l of logs) {
-        const a = l.args;
-        const tf = Number(a.trailingFloor ?? 0n) / ASSET;
-        const df = Number(a.dailyFloor ?? 0n) / ASSET;
-        collected.push({
-          t: Number(a.markedAt ?? 0n),
-          block: Number(l.blockNumber ?? 0n),
-          equity: Number(a.equity ?? 0n) / ASSET,
-          highWaterMark: Number(a.highWaterMark ?? 0n) / ASSET,
-          trailingFloor: tf,
-          dailyFloor: df,
-          floor: Math.max(tf, df),
-          netPnl: Number(a.netPnl ?? 0n) / ASSET,
-        });
-      }
-    }
-  }
-
-  // Windows are walked newest-first and resolve out of order, so sort before charting.
-  return collected.sort((a, b) => a.block - b.block);
+  return logs.map((l) => {
+    const a = l.args;
+    const tf = Number(a.trailingFloor ?? 0n) / ASSET;
+    const df = Number(a.dailyFloor ?? 0n) / ASSET;
+    return {
+      t: Number(a.markedAt ?? 0n),
+      block: Number(l.blockNumber ?? 0n),
+      equity: Number(a.equity ?? 0n) / ASSET,
+      highWaterMark: Number(a.highWaterMark ?? 0n) / ASSET,
+      trailingFloor: tf,
+      dailyFloor: df,
+      floor: Math.max(tf, df),
+      netPnl: Number(a.netPnl ?? 0n) / ASSET,
+    };
+  });
 }
 
 export type CurveResult = {points: EquityPoint[]; source: "envio" | "rpc"};
