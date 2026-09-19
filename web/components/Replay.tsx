@@ -27,22 +27,40 @@ const money2 = (v: number) =>
 
 const STEP_MS = 1100;
 
-export function Replay({autoPlay = true}: {autoPlay?: boolean}) {
+export function Replay({
+  autoPlay = true,
+  loop = true,
+}: {
+  autoPlay?: boolean;
+  /** Presentation mode plays once and holds on the breach, so narration stays in sync. */
+  loop?: boolean;
+}) {
   const [i, setI] = useState(0);
   const [playing, setPlaying] = useState(autoPlay);
   const frames = replay.frames as Frame[];
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // useState only reads autoPlay on mount. Presentation mode renders this hidden and starts
+  // it later by flipping the prop — without this the replay sat on frame 0 forever while the
+  // narration talked about a breach happening.
+  useEffect(() => {
+    setPlaying(autoPlay);
+    if (autoPlay) setI(0);
+  }, [autoPlay]);
+
   useEffect(() => {
     if (!playing) return;
     if (i >= frames.length - 1) {
-      // Hold on the breach, then loop. A demo that stops on its last frame gets watched once.
+      // On the landing page, hold on the breach then loop: a demo that stops on its last
+      // frame gets watched once. Under narration, holding is the point — a loop would run
+      // the account back to healthy while the voiceover is still on the breach.
+      if (!loop) return;
       timer.current = setTimeout(() => setI(0), 4200);
       return () => clearTimeout(timer.current);
     }
     timer.current = setTimeout(() => setI((n) => n + 1), STEP_MS);
     return () => clearTimeout(timer.current);
-  }, [i, playing, frames.length]);
+  }, [i, playing, loop, frames.length]);
 
   const shown = frames.slice(0, i + 1);
   const cur = frames[i]!;

@@ -40,7 +40,10 @@ export default function Landing() {
         <Replay />
         <p className="px-1 text-center text-2xs text-txt-lo">
           Recorded from a real mandate on chain — not a mock-up. The transaction that enforced
-          it is linked above.
+          it is linked above.{" "}
+          <Link href="/demo" className="underline decoration-txt-lo/40 hover:text-txt-hi">
+            Watch the full walkthrough →
+          </Link>
         </p>
       </section>
 

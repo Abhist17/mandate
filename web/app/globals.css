@@ -151,3 +151,13 @@ main {
   position: relative;
   z-index: 1;
 }
+
+/* Presentation mode: no chrome in frame. */
+body.presenting nav,
+body.presenting footer {
+  display: none;
+}
+body.presenting main {
+  padding: 0;
+  max-width: none;
+}

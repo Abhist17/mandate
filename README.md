@@ -171,6 +171,16 @@ LP deposits ──► CapitalPool ──► allocates ──► MandateAccount (
 | Indexer | `indexer/` | Envio HyperIndex — equity curves, fill history |
 | Frontend | `web/` | Trader view (equity curve + floor), LP view |
 
+## See it work without installing anything
+
+The landing page plays a **real breach, recorded from chain** — equity falling, crossing the
+floor, the contract flattening the position — with the enforcing transaction's hash linked.
+No wallet, no gas, no keeper. It works even when the infrastructure is down, which for a
+testnet project is an honest thing to plan for.
+
+`/demo` is the same recording under a scripted narration, built to be screen-recorded:
+space to pause, R to restart, F for fullscreen.
+
 ## Sharing it with testers
 
 [SHARE.md](SHARE.md) has copy-paste posts, what to ask testers for, and answers to the two

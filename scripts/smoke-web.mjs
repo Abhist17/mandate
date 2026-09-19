@@ -22,6 +22,8 @@ const PAGES = [
   {path: "/", mustContain: ["The rules are the contract", "A real breach, recorded on chain"]},
   {path: "/trade", mustContain: ["Distance to floor", "Equity vs drawdown"]},
   {path: "/lp", mustContain: ["Capital pool", "What you are underwriting"]},
+  {path: "/market", mustContain: ["Capital competes for traders"]},
+  {path: "/demo", mustContain: ["A real breach, recorded on chain"]},
 ];
 
 const CHROME =
