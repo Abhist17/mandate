@@ -8,6 +8,10 @@ import {CHAIN_ID} from "@/lib/chain";
 export function Nav() {
   const path = usePathname();
 
+  // The public mandate page is a standalone document with its own header and its own
+  // call to action. App chrome on it just offers a stranger three places to get lost.
+  if (path.startsWith("/m/")) return null;
+
   const tabs = [
     {href: "/trade", label: "Trade"},
     {href: "/market", label: "Market"},

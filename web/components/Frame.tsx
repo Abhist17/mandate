@@ -18,8 +18,15 @@ import {isConfigured} from "@/lib/chain";
  * charts in it rather than as somewhere you work.
  */
 
-/** Routes that are documents, not the application. */
-const PLAIN = (path: string) => path === "/" || path.startsWith("/demo");
+/**
+ * Routes that are documents, not the application.
+ *
+ * /m/<id> is the public face of one mandate, written for someone who followed a link and
+ * has no wallet, no session and no other mandates. Showing them an account rail listing
+ * six accounts they do not own answers a question they did not ask.
+ */
+const PLAIN = (path: string) =>
+  path === "/" || path.startsWith("/demo") || path.startsWith("/m/");
 
 export function Frame({children}: {children: React.ReactNode}) {
   const path = usePathname();

@@ -22,7 +22,9 @@ export function Crumb({mandate}: {mandate: Mandate}) {
   const [spinning, setSpinning] = useState(false);
 
   const share = async () => {
-    const url = `${location.origin}/trade?m=${mandate.id}`;
+    // The public page, not the dashboard: whoever opens this has no wallet, no session
+    // and no idea what a mandate is, and that page is written for them.
+    const url = `${location.origin}/m/${mandate.id}`;
     try {
       await navigator.clipboard.writeText(url);
       push({kind: "success", title: "Link copied", body: "Anyone can open this mandate — no account needed."});

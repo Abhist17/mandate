@@ -5,6 +5,9 @@ import {Frame} from "@/components/Frame";
 import {ToastProvider} from "@/components/Toast";
 
 export const metadata: Metadata = {
+  // Absolute URLs for share cards. Without it Next falls back to localhost and every
+  // unfurled link points at the machine that rendered it.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Mandate — the rules are the contract",
   description:
     "An onchain prop firm on Monad. Funded capital with the risk limits written into the contract, enforced every block by a function anyone can call.",
