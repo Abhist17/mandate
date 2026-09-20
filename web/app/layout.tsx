@@ -1,5 +1,20 @@
 import type {Metadata} from "next";
+import {Instrument_Serif} from "next/font/google";
 import "./globals.css";
+
+/**
+ * One display face, used only where the product speaks in its own voice.
+ *
+ * Every crypto product ships Inter, so Inter is invisible. A high-contrast serif on a
+ * trading product is unusual enough to be remembered and, kept off the dashboard, costs
+ * nothing in legibility — numbers stay tabular mono, which is what a terminal wants.
+ */
+const display = Instrument_Serif({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
 import {Nav} from "@/components/Nav";
 import {Frame} from "@/components/Frame";
 import {ToastProvider} from "@/components/Toast";
@@ -30,7 +45,7 @@ export const viewport = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-ink-980">
+      <body className={`${display.variable} min-h-screen bg-ink-980`}>
         <ToastProvider>
           <Nav />
           <Frame>{children}</Frame>

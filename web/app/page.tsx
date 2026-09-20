@@ -22,9 +22,11 @@ export default function Landing() {
         <p className="text-2xs uppercase tracking-[0.2em] text-txt-lo">
           Onchain prop firm · Monad
         </p>
-        <h1 className="text-balance text-3xl font-semibold leading-[1.15] tracking-tight text-txt-hi sm:text-5xl">
+        <h1 className="font-display text-balance text-[2.6rem] leading-[1.05] tracking-tight text-txt-hi sm:text-[4.25rem]">
           The rules are the contract.
         </h1>
+        {/* The line the whole product is about, drawn under the sentence that claims it. */}
+        <div className="floor-rule mx-auto max-w-xl" />
         <p className="mx-auto max-w-2xl text-balance text-sm leading-relaxed text-txt-mid sm:text-base">
           Prop firms give you capital under a rulebook, then decide for themselves whether you
           broke it — and whether you get paid. Here the drawdown, the daily limit and the

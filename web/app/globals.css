@@ -141,6 +141,22 @@
   animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* ── the floor ───────────────────────────────────────────────────────────────
+   The product is one line you must not cross. Rather than invent a logo, the line
+   itself is the mark: it rules off the header, opens a section, and sits under the
+   hero. Used sparingly enough that it still reads as a boundary and not a border. */
+.floor-rule {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 61, 85, 0.75) 0%,
+    rgba(255, 61, 85, 0.28) 38%,
+    rgba(255, 61, 85, 0.06) 70%,
+    transparent 100%
+  );
+}
+
 /* Key numbers get optical tightening so large figures don't look loose. */
 .figure {
   font-variant-numeric: tabular-nums;

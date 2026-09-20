@@ -39,6 +39,7 @@ export default {
         },
       },
       fontFamily: {
+        display: ["var(--font-display)", "Georgia", "serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"],
       },

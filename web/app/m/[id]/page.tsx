@@ -59,7 +59,7 @@ export default async function PublicMandatePage({params}: Params) {
       </header>
 
       {/* The floor line, as the page's own rule. */}
-      <div className="h-px w-full bg-gradient-to-r from-down/70 via-down/25 to-transparent" />
+      <div className="floor-rule" />
 
       <section className="panel overflow-hidden">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge px-5 py-4">
