@@ -2,6 +2,9 @@
 
 import {ADDR} from "@/lib/chain";
 import {fmtUsd, fmtPct, toNum} from "@/lib/format";
+import {ProofChip} from "@/lib/useProof";
+import {registryAbi} from "@/lib/abi";
+import type {ProofSpec} from "@/components/Proof";
 import type {Mandate} from "@/lib/data";
 
 /**
@@ -30,7 +33,8 @@ type Row = {
   ok: boolean;
   /** Null when the rule is not part of these terms. */
   applies: boolean;
-  source: string;
+  /** The contract call this row's number came out of, made pressable. */
+  source: ProofSpec;
   note?: string;
   /**
    * Which consequence this rule carries. Prop firms separate these on their objectives
@@ -87,6 +91,20 @@ export function Objectives({mandate}: {mandate: Mandate}) {
   const consistency = Number(mandate.consistencyBps) / 100;
   const consistencyMax = terms.maxConsistencyBps / 100;
 
+  // Each row names the call its number came out of, and carries enough to re-run it.
+  const reg = ADDR.registry as `0x${string}`;
+  const floorSpec = (title: string, shown: string, blurb: string): ProofSpec => ({
+    title,
+    blurb,
+    address: reg,
+    abi: registryAbi as never,
+    functionName: "floorOf",
+    args: [mandate.id],
+    shown,
+    // floorOf returns (effectiveFloor, lastEquity); the floor is the part on screen.
+    format: (d) => fmtUsd((d as readonly bigint[])[0]),
+  });
+
   const rows: Row[] = ([
     {
       label: "Max daily loss",
@@ -95,7 +113,11 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       limitLabel: fmtUsd(BigInt(Math.round(dailyAllowance * 1e6))),
       ok: dailyUsed < dailyAllowance,
       applies: true,
-      source: "floorOf()",
+      source: floorSpec(
+        "The floor your daily limit sets",
+        fmtUsd(mandate.floor),
+        "floorOf() returns the higher of the drawdown floor and the daily floor. Right now the daily one is binding.",
+      ),
       group: "limit",
       binding: binding === "daily",
       note: `${fmtPct(terms.dailyLossBps)} of ${toNum(state.dayStartBalance) > dayStart ? "day-start balance" : "day-start equity"} · resets ${String(terms.resetHourUtc).padStart(2, "0")}:00 UTC`,
@@ -107,7 +129,11 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       limitLabel: fmtUsd(BigInt(Math.round(ddAllowance * 1e6))),
       ok: equity >= floor,
       applies: true,
-      source: "floorOf()",
+      source: floorSpec(
+        "The floor your drawdown sets",
+        fmtUsd(mandate.floor),
+        "floorOf() returns the higher of the drawdown floor and the daily floor — the one that actually closes the account.",
+      ),
       group: "limit",
       binding: binding === "drawdown",
       note:
@@ -124,7 +150,16 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       limitLabel: fmtUsd(BigInt(Math.round(capLimit * 1e6))),
       ok: notional <= capLimit * 1.01,
       applies: true,
-      source: "openPosition()",
+      source: {
+        title: "Your position cap",
+        blurb: "The cap is checked inside openPosition() before any fill. This reads the same value the check uses.",
+        address: reg,
+        abi: registryAbi as never,
+        functionName: "positionCapOf",
+        args: [mandate.id],
+        shown: fmtUsd(BigInt(Math.round(capLimit * 1e6))),
+        format: (d) => fmtUsd(d as bigint),
+      },
       group: "limit",
       note: `${terms.maxPositionBps / 10_000}x allocation · checked before every fill`,
     },
@@ -135,7 +170,16 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       limitLabel: `${consistencyMax.toFixed(0)}%`,
       ok: consistency <= consistencyMax,
       applies: terms.maxConsistencyBps > 0,
-      source: "consistencyScore()",
+      source: {
+        title: "Your consistency score",
+        blurb: "Biggest winning day over total profit, in basis points. Gates the payout, not the account.",
+        address: reg,
+        abi: registryAbi as never,
+        functionName: "consistencyScore",
+        args: [mandate.id],
+        shown: `${consistency.toFixed(2)}%`,
+        format: (d) => `${(Number(d as bigint) / 100).toFixed(2)}%`,
+      },
       group: "condition",
       note: "biggest winning day ÷ total profit · gates the payout, not the account",
     },
@@ -146,7 +190,15 @@ export function Objectives({mandate}: {mandate: Mandate}) {
       limitLabel: String(terms.minProfitableDays),
       ok: state.profitableDays >= terms.minProfitableDays,
       applies: terms.minProfitableDays > 0,
-      source: "recordOf()",
+      source: {
+        title: "Your trader record",
+        blurb: "The public record this contract wrote about you — settled mandates, breaches, profitable days.",
+        address: reg,
+        abi: registryAbi as never,
+        functionName: "recordOf",
+        args: [state.trader],
+        shown: String(state.profitableDays),
+      },
       group: "condition",
       note: `${state.tradingDays} trading day${state.tradingDays === 1 ? "" : "s"} completed`,
     },
@@ -311,7 +363,7 @@ function ObjectiveRow({row, dimmed}: {row: Row; dimmed: boolean}) {
 
       <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3">
         <span className="text-2xs text-txt-lo">{row.note}</span>
-        <span className="num text-2xs text-txt-lo/70">{row.source}</span>
+        <ProofChip spec={row.source} />
       </div>
     </div>
   );

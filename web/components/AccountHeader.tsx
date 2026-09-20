@@ -1,6 +1,9 @@
 "use client";
 
 import {Live} from "@/components/ui";
+import {ProofChip} from "@/lib/useProof";
+import {registryAbi} from "@/lib/abi";
+import {ADDR} from "@/lib/chain";
 import {fmtUsd, fmtSigned, toNum} from "@/lib/format";
 import {BREACH_KIND} from "@/lib/chain";
 import type {Mandate} from "@/lib/data";
@@ -74,8 +77,23 @@ export function AccountHeader({mandate}: {mandate: Mandate}) {
           >
             {active ? <Live value={fmtUsd(mandate.headroom)} /> : "—"}
           </div>
-          <div className="mt-1 text-2xs text-txt-lo">
-            {active ? `${(bps / 100).toFixed(2)}% of equity` : BREACH_KIND[state.breachKind]}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-2xs text-txt-lo">
+            <span>{active ? `${(bps / 100).toFixed(2)}% of equity` : BREACH_KIND[state.breachKind]}</span>
+            {/* The biggest number on the screen is the one most worth doubting, so it is
+                the one that carries the check. */}
+            <ProofChip
+              spec={{
+                title: "Distance to floor",
+                blurb:
+                  "headroom() returns how far equity sits above the floor, and the bps it works out to. The same pair markAndEnforce compares before it decides to close you.",
+                address: ADDR.registry as `0x${string}`,
+                abi: registryAbi as never,
+                functionName: "headroom",
+                args: [mandate.id],
+                shown: fmtUsd(mandate.headroom),
+                format: (d) => fmtUsd((d as readonly bigint[])[0]),
+              }}
+            />
           </div>
         </div>
         <Figure

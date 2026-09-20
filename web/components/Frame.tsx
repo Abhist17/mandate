@@ -5,6 +5,7 @@ import {Sidebar} from "@/components/Sidebar";
 import {NetworkGuard} from "@/components/NetworkGuard";
 import {FeedStatus} from "@/components/FeedStatus";
 import {MandatesProvider} from "@/lib/useMandates";
+import {ProofProvider} from "@/lib/useProof";
 import {isConfigured} from "@/lib/chain";
 
 /**
@@ -42,6 +43,7 @@ export function Frame({children}: {children: React.ReactNode}) {
   // a hook every caller has to defend against.
   return (
     <MandatesProvider>
+      <ProofProvider>
       <div className="flex min-h-[calc(100vh-49px)]">
         {isConfigured && <Sidebar />}
         <main className="min-w-0 flex-1 px-3 py-4 sm:px-5 sm:py-5">
@@ -54,6 +56,7 @@ export function Frame({children}: {children: React.ReactNode}) {
           </div>
         </main>
       </div>
+      </ProofProvider>
     </MandatesProvider>
   );
 }

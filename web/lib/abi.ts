@@ -188,6 +188,13 @@ export const registryAbi = [
     stateMutability: "view",
   },
   {
+    type: "function",
+    name: "positionCapOf",
+    inputs: [{name: "mandateId", type: "uint256"}],
+    outputs: [{type: "uint256"}],
+    stateMutability: "view",
+  },
+  {
     type: "event",
     name: "EquityMarked",
     inputs: [
