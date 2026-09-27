@@ -109,15 +109,40 @@ async function main() {
   // broke the moment that mandate breached first. Letting the sizes do the work is both
   // simpler and a more honest demonstration.
   console.log(`${c.b}Opening positions${c.r}`);
-  const plan: Record<string, {size: bigint; isLong: boolean}> = {
-    healthy: {size: 1n * 10n ** 18n, isLong: false},
-    "near-floor": {size: 2n * 10n ** 18n, isLong: true},
-    breached: {size: 3n * 10n ** 18n, isLong: true},
+
+  // Sizes are expressed as a share of each mandate's headroom, not in BTC.
+  //
+  // They used to be fixed — 1, 2 and 3 BTC — which silently calibrated the whole scenario
+  // to BTC at about $81k. The registry's pre-trade check refuses any open whose equity,
+  // after a `preTradeBufferBps` (2%) adverse move, would sit under the floor; at $84.7k the
+  // 3 BTC "breached" open projected to $94,919.57 against a $95,000 floor and reverted with
+  // WouldBreachFloor, and the whole local stack stopped at step 4. Priced against headroom,
+  // each outcome holds at any BTC level:
+  //
+  //   buffer   = preTradeBufferBps (2%)      path = the 2.5% walk-down below
+  //   breached   0.90 · H / (buffer · P)  →  pre-trade uses 90% of H; the walk loses 1.125 H
+  //   near-floor 0.85 · H / (path · P)    →  pre-trade uses 68% of H; ends 0.15 H above floor
+  //   healthy    0.35 · H / (buffer · P)  →  short, so the walk-down only helps it
+  const BUFFER = 200n; // bps — MandateRegistry.preTradeBufferBps
+  const PATH = 250n; // bps — the 1000‰ → 975‰ walk below
+  const sizeFor = (headroom: bigint, share: bigint, moveBps: bigint) =>
+    // (H/1e6)·(share/100) / ((move/1e4)·(P/1e8)) · 1e18  =  H·share·1e22 / (move·P),
+    // floored to 0.001 BTC. At $84.7k: breached 2.657, near-floor 2.008, healthy 1.033.
+    (((headroom * share * 10n ** 22n) / (moveBps * startPrice)) / 10n ** 15n) * 10n ** 15n;
+
+  const plan: Record<string, {share: bigint; move: bigint; isLong: boolean}> = {
+    healthy: {share: 35n, move: BUFFER, isLong: false},
+    "near-floor": {share: 85n, move: PATH, isLong: true},
+    breached: {share: 90n, move: BUFFER, isLong: true},
   };
 
   for (const s of seeded) {
-    const p = plan[s.label];
-    if (!p) continue;
+    const spec = plan[s.label];
+    if (!spec) continue;
+    const [headroom] = await pub.readContract({
+      address: a.registry, abi: abis.registry, functionName: "headroom", args: [s.id],
+    });
+    const p = {size: sizeFor(headroom, spec.share, spec.move), isLong: spec.isLong};
     const w = createWalletClient({
       account: privateKeyToAccount(s.pk), chain: monadTestnet, transport: http(RPC),
     });
