@@ -230,6 +230,7 @@ export function EquityChart({
 
   const last = points[points.length - 1]!;
   const healthy = last.equity >= last.floor;
+  const near = !breached && healthy && (last.equity - last.floor) / last.equity < 0.01;
   const span = last.t - points[0]!.t;
   const fmtTick = tickFormatter(span);
 
@@ -338,6 +339,24 @@ export function EquityChart({
           name="Drawdown floor"
           style={{filter: "url(#floorGlow)"}}
         />
+
+        {/* Inside 1% of the floor, the floor itself raises its hand. A separate stroke-only
+            overlay pulses, so the masking fill underneath never flickers, and it runs only
+            while the real account is actually in the band — it is an alarm, not a loop. */}
+        {near && (
+          <Area
+            type="stepAfter"
+            dataKey="floor"
+            stroke="#ff3d55"
+            strokeWidth={4}
+            fill="none"
+            dot={false}
+            isAnimationActive={false}
+            legendType="none"
+            className="floor-alert"
+            style={{filter: "url(#floorGlow)"}}
+          />
+        )}
 
         {/* The peak the trailing floor is measured from. Ratchets up, never down. */}
         <Area

@@ -10,6 +10,10 @@
   html,
   body {
     @apply bg-ink-980 text-txt-hi antialiased;
+    /* clip, not hidden: a full-bleed backdrop may extend past the column without ever
+       creating a horizontal scrollbar, and — unlike hidden — clip does not make body a
+       scroll container, so sticky positioning keeps working. */
+    overflow-x: clip;
     font-feature-settings: "tnum" 1, "cv05" 1;
     -webkit-font-smoothing: antialiased;
   }
@@ -155,6 +159,159 @@
     rgba(255, 61, 85, 0.06) 70%,
     transparent 100%
   );
+}
+
+/* ── motion system ────────────────────────────────────────────────────────────
+   Every rule below is either CSS-only (so it runs at first paint, before JS) or gated on
+   html[data-motion="on"], which a pre-paint script in <head> sets only when the reader has
+   not asked for reduced motion. Without that attribute — no JS, reduced motion, a crawler —
+   everything renders in its final state. Motion is an enhancement, never a precondition
+   for seeing the content. */
+
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Headline: each word rises out of its own mask, then the line settles. CSS-only, so the
+   claim is legible at first paint instead of waiting for hydration. */
+.wr {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  /* room for serif descenders, which a tight mask would clip */
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+.wr > span {
+  display: inline-block;
+  animation: wr-in 760ms var(--ease-out) both;
+}
+@keyframes wr-in {
+  from { transform: translate3d(0, 108%, 0); }
+  to   { transform: translate3d(0, 0, 0); }
+}
+.settle { animation: settle 1100ms var(--ease-out) 480ms both; }
+@keyframes settle {
+  from { transform: translate3d(0, 7px, 0); }
+  to   { transform: translate3d(0, 0, 0); }
+}
+.fade-late { animation: fade-late 700ms var(--ease-out) both; }
+@keyframes fade-late {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Progressive reveal. `wipe` uncovers top-to-bottom like a terminal pane drawing in; the
+   plain variant rises. `done` strips the transform and clip once finished, so nothing
+   revealed is left inside a containing block that would trap fixed or overflowing content. */
+html[data-motion="on"] .reveal {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition:
+    opacity 520ms var(--ease-out),
+    transform 720ms var(--ease-out),
+    clip-path 820ms var(--ease-out);
+  transition-delay: var(--d, 0ms);
+}
+html[data-motion="on"] .reveal.wipe { clip-path: inset(0 0 100% 0); }
+html[data-motion="on"] .reveal.in {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  clip-path: inset(0 0 0 0);
+}
+html[data-motion="on"] .reveal.done {
+  transform: none;
+  clip-path: none;
+  transition: none;
+}
+
+/* A confirmation: one ring out from the point of settlement, then nothing. Used exactly
+   where something became final — never as an idle loop. */
+@keyframes ripple {
+  from { transform: scale(0.55); opacity: 0.6; }
+  to   { transform: scale(2.6);  opacity: 0; }
+}
+.ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ripple 900ms var(--ease-out) both;
+}
+
+/* The floor, when equity is close to it. A functional alarm — it runs only while the
+   account is inside the warning band, and stops the moment it leaves. */
+@keyframes floor-alert {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+.floor-alert { animation: floor-alert 1.6s var(--ease-in-out) infinite; }
+
+/* Market traces in the hero backdrop: two identical tiles translated by exactly one tile
+   width (1200 user units), so the loop has no seam. In px rather than %, because a percent
+   translate on an SVG group resolves against the view box, not the group. */
+@keyframes hb-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-1200px, 0, 0); }
+}
+.hb-drift { animation: hb-drift 46s linear infinite; }
+.hb-drift-slow { animation: hb-drift 72s linear infinite; }
+
+/* A transaction crossing the grid. On screen for the first quarter of its period and
+   invisible for the rest — occasional by construction, not by chance. */
+@keyframes hb-pulse {
+  0%        { transform: translate3d(0, 0, 0); opacity: 0; }
+  2%        { opacity: 1; }
+  24%       { transform: translate3d(1260px, 0, 0); opacity: 1; }
+  25%, 100% { transform: translate3d(1260px, 0, 0); opacity: 0; }
+}
+.hb-pulse {
+  opacity: 0;
+  animation-name: hb-pulse;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* One beat per new block, re-triggered by remounting the dot — so the pulse rate is the
+   chain's block rate, not a timer's. */
+@keyframes block-beat {
+  from { transform: scale(1.5); box-shadow: 0 0 0 0 rgba(0, 227, 155, 0.55); }
+  to   { transform: scale(1);   box-shadow: 0 0 0 6px rgba(0, 227, 155, 0); }
+}
+.block-beat { animation: block-beat 700ms var(--ease-out) both; }
+
+/* Lift on hover: two pixels and a brighter edge. The card acknowledges the pointer and
+   stops there. */
+.lift {
+  transition:
+    transform 220ms var(--ease-out),
+    border-color 220ms var(--ease-out),
+    background-color 220ms var(--ease-out);
+}
+@media (pointer: fine) {
+  .lift:hover { transform: translate3d(0, -2px, 0); }
+}
+
+/* Drawer entrance: in from the edge it is attached to. */
+@keyframes drawer-in {
+  from { transform: translate3d(24px, 0, 0); opacity: 0; }
+  to   { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.drawer-in { animation: drawer-in 260ms var(--ease-out) both; }
+.scrim-in  { animation: scrim-in 200ms linear both; }
+
+/* The floor rule under the headline draws in from the left once the words have landed —
+   the line arriving after the sentence that claims it. */
+.floor-rule-draw {
+  transform-origin: left center;
+  animation: rule-draw 1000ms var(--ease-out) 720ms both;
+}
+@keyframes rule-draw {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
 
 /* Key numbers get optical tightening so large figures don't look loose. */

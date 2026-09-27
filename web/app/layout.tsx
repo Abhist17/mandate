@@ -42,9 +42,25 @@ export const viewport = {
   themeColor: "#05060a",
 };
 
+/**
+ * Runs before first paint. Scroll reveals hide content until it is on screen, and doing
+ * that from a React effect would paint everything, hide it, then reveal it — a flash on
+ * every load. Setting the switch here means content is hidden from the first frame when
+ * motion is wanted, and never hidden at all when it is not: no JS, reduced motion, or a
+ * crawler all see the page in its final state.
+ */
+const MOTION_SWITCH =
+  "try{if(!matchMedia('(prefers-reduced-motion: reduce)').matches)" +
+  "document.documentElement.setAttribute('data-motion','on')}catch(e){}";
+
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en">
+    // The attribute is set by the script before hydration, so the server's HTML and the
+    // client's DOM legitimately differ on this one node.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{__html: MOTION_SWITCH}} />
+      </head>
       <body className={`${display.variable} min-h-screen bg-ink-980`}>
         <ToastProvider>
           <Nav />

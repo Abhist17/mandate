@@ -102,10 +102,11 @@ export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: (
       <button
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+        className="scrim-in absolute inset-0 bg-black/60 backdrop-blur-[2px]"
       />
 
-      <aside className="relative flex h-full w-full max-w-[520px] flex-col overflow-y-auto border-l border-edge bg-ink-950 shadow-2xl">
+      {/* In from the edge it is attached to — the panel belongs to the page's right side. */}
+      <aside className="drawer-in relative flex h-full w-full max-w-[520px] flex-col overflow-y-auto border-l border-edge bg-ink-950 shadow-2xl">
         <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-edge bg-ink-950/95 px-5 py-4 backdrop-blur">
           <div className="min-w-0">
             <div className="text-2xs font-semibold uppercase tracking-[0.16em] text-txt-lo">

@@ -5,6 +5,7 @@ import {
   Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, XAxis, YAxis,
 } from "recharts";
 import replay from "@/lib/replay-data.json";
+import {usePrefersReducedMotion} from "@/lib/motion";
 
 /**
  * A recorded breach, played back.
@@ -48,6 +49,17 @@ export function Replay({
     if (autoPlay) setI(0);
   }, [autoPlay]);
 
+  // Someone who has asked for less motion gets the answer, not the playback: the breach
+  // frame, paused, with play one click away. Only on the looping landing copy — presentation
+  // mode is driven by its own script, and the person running it has chosen playback.
+  const reduce = usePrefersReducedMotion();
+  useEffect(() => {
+    if (reduce && loop) {
+      setPlaying(false);
+      setI(frames.length - 1);
+    }
+  }, [reduce, loop, frames.length]);
+
   useEffect(() => {
     if (!playing) return;
     if (i >= frames.length - 1) {
@@ -83,7 +95,12 @@ export function Replay({
           </span>
         </div>
         <button
-          onClick={() => setPlaying((p) => !p)}
+          onClick={() => {
+            // From the breach frame, play means "show me again" — start now, not after
+            // the pause the loop holds on the last frame.
+            if (!playing && i >= frames.length - 1) setI(0);
+            setPlaying(!playing);
+          }}
           className="text-2xs text-txt-lo transition-colors hover:text-txt-hi"
         >
           {playing ? "pause" : "play"}
