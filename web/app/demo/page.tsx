@@ -3,6 +3,7 @@
 import {useEffect, useState} from "react";
 import Link from "next/link";
 import {Replay} from "@/components/Replay";
+import {CapitalEngine} from "@/components/landing/CapitalEngine";
 
 /**
  * Presentation mode — built to be screen-recorded.
@@ -65,19 +66,31 @@ const SCRIPT: Beat[] = [
   },
   {
     at: 47,
+    kicker: "The enforcement market",
+    line: "And whoever enforces a breach is paid for it.",
+    sub: "0.25% of the allocation, out of the capital it protects — a liquidation bonus for a rulebook. Nobody has to run our keeper: searchers race for it.",
+  },
+  {
+    at: 56,
     kicker: "Why Monad",
     line: "A mark costs about $0.0003.",
     sub: "Marking every open account every block is only affordable at 400ms and sub-cent gas. That is why the enforcement layer has not been built before.",
   },
   {
-    at: 56,
+    at: 65,
+    kicker: "The record",
+    line: "Your track record is your application.",
+    sub: "Settlement writes it, in the same transaction. Every backer's offer reads it and answers on its own — qualifies, or exactly why not.",
+  },
+  {
+    at: 74,
     kicker: "What's new",
     line: "Not a better prop firm. The market that replaces one.",
-    sub: "Your record is written by the contract that enforced it, so it travels. Backers compete on terms. No challenge fees — nobody earns anything when you fail.",
+    sub: "Enforcement anyone is paid to run. A record nobody can edit. Backers compete on terms. No challenge fees — nobody earns anything when you fail.",
   },
 ];
 
-const RUNTIME = 66;
+const RUNTIME = 84;
 
 export default function DemoPage() {
   const [t, setT] = useState(0);
@@ -141,11 +154,19 @@ export default function DemoPage() {
             )}
           </div>
 
-          {/* the evidence — starts once the setup has landed */}
-          <div
-            className={`transition-opacity duration-700 ${t >= 20 ? "opacity-100" : "opacity-0"}`}
-          >
-            <Replay autoPlay={t >= 20} loop={false} />
+          {/* the evidence — starts once the setup has landed, and changes with the argument */}
+          <div className={`transition-opacity duration-700 ${t >= 20 ? "opacity-100" : "opacity-0"}`}>
+            {t < 47 ? (
+              <Replay autoPlay={t >= 20} loop={false} />
+            ) : t < 56 ? (
+              <BountyBeat key="bounty" />
+            ) : t < 65 || t >= 74 ? (
+              <div className="rise">
+                <CapitalEngine />
+              </div>
+            ) : (
+              <PassportBeat key="passport" />
+            )}
           </div>
         </div>
       </div>
@@ -154,13 +175,87 @@ export default function DemoPage() {
       <div className="flex items-center justify-between px-5 py-3 text-2xs text-txt-lo">
         <span className="num">
           {String(Math.floor(t / 60)).padStart(2, "0")}:
-          {String(Math.floor(t % 60)).padStart(2, "0")} / 01:06
+          {String(Math.floor(t % 60)).padStart(2, "0")} / {String(Math.floor(RUNTIME / 60)).padStart(2, "0")}:
+          {String(RUNTIME % 60).padStart(2, "0")}
         </span>
         <span className="hidden sm:inline">space pause · R restart · F fullscreen</span>
         <Link href="/" className="transition-colors hover:text-txt-hi">
           exit
         </Link>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The bounty, illustrated. Labelled as an illustration: the recorded breach above happened
+ * before the enforcement market existed, so it paid no bounty, and this does not pretend
+ * otherwise. The numbers are the deployed ones — 25 bps of a $100,000 allocation.
+ */
+function BountyBeat() {
+  return (
+    <div className="rise overflow-hidden rounded-xl border border-edge bg-ink-900 shadow-panel-lg">
+      <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+        <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-txt-hi">Bounty board</span>
+        <span className="rounded border border-edge px-1.5 py-px text-[0.6rem] uppercase tracking-[0.12em] text-txt-lo">illustration</span>
+      </div>
+      <div className="space-y-4 p-5">
+        <div className="num flex items-center gap-3 rounded-lg border border-down/30 bg-down/[0.06] px-4 py-3 text-sm">
+          <span className="text-txt-hi">#6</span>
+          <span className="text-txt-mid">$94,412.64</span>
+          <span className="text-down">below $95,000 floor</span>
+          <span className="ml-auto rounded-md border border-down/40 bg-down/10 px-2.5 py-1 text-xs font-semibold text-down">
+            Enforce · earn $250.00
+          </span>
+        </div>
+        <div className="num rise rise-3 rounded-lg border border-edge bg-ink-980 p-4 text-xs leading-relaxed text-txt-mid">
+          <div>
+            <span className="text-acc-hi">markAndEnforce</span>(6) <span className="text-txt-lo">from 0x9f2e…a41c — no role</span>
+          </div>
+          <div className="mt-1.5 text-txt-lo">→ position flattened, split settled</div>
+          <div className="mt-1.5 text-up">→ EnforcementBountyPaid(6, 0x9f2e…a41c, $250.00)</div>
+        </div>
+        <p className="text-xs leading-relaxed text-txt-lo">
+          Paid from the LP side — never the trader&rsquo;s share. The trader is never paid for their own breach.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** The passport, illustrated with the seeded ladder's real rungs and the book's real reasons. */
+function PassportBeat() {
+  const offers: [string, string, boolean, string][] = [
+    ["$25,000", "70%", true, "qualifies — claimable now"],
+    ["$50,000", "80%", true, "qualifies — claimable now"],
+    ["$100,000", "90%", false, "Not enough settled mandates"],
+    ["$250,000", "92%", false, "Not enough settled mandates"],
+  ];
+  return (
+    <div className="rise overflow-hidden rounded-xl border border-edge bg-ink-900 shadow-panel-lg">
+      <div className="flex items-center gap-3 border-b border-edge px-5 py-3">
+        <span className="num text-sm font-semibold text-txt-hi">0x4b2c…9b0f</span>
+        <span className="rounded-md border border-up/30 bg-up/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-up">Clean record</span>
+        <span className="ml-auto rounded border border-edge px-1.5 py-px text-[0.6rem] uppercase tracking-[0.12em] text-txt-lo">illustration</span>
+      </div>
+      <div className="num grid grid-cols-4 gap-3 border-b border-edge px-5 py-4 text-center">
+        {[["Settled", "1"], ["Breaches", "0"], ["Profitable", "1"], ["Net", "+$3,520"]].map(([k, v]) => (
+          <div key={k}>
+            <div className="text-[0.6rem] uppercase tracking-[0.14em] text-txt-lo">{k}</div>
+            <div className={`mt-1 text-lg ${k === "Breaches" || k === "Net" || k === "Profitable" ? "text-up" : "text-txt-hi"}`}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <ul className="divide-y divide-edge/60">
+        {offers.map(([a, split, ok, why], i) => (
+          <li key={a} className="rise flex items-center gap-4 px-5 py-2.5 text-xs" style={{animationDelay: `${200 + i * 160}ms`}}>
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[0.65rem] ${ok ? "border-up/50 bg-up/10 text-up" : "border-edge text-txt-lo"}`}>{ok ? "✓" : "·"}</span>
+            <span className="num text-txt-hi">{a}</span>
+            <span className="num text-txt-mid">{split} to trader</span>
+            <span className={`ml-auto text-2xs ${ok ? "text-up" : "text-txt-lo"}`}>{why}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
