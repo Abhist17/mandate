@@ -7,6 +7,7 @@ import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
 import {fmtPrice, fmtUsd} from "@/lib/format";
 import {useFeed, feedCutoff, type Mandate} from "@/lib/data";
+import {previewBreach, px} from "@/lib/breach";
 
 /**
  * Order entry.
@@ -164,6 +165,30 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
             <span className="num text-up">buy {fmtPrice(quote.buy)}</span>
             <span className="num text-down">sell {fmtPrice(quote.sell)}</span>
           </div>
+          {/* Before the order, not after: the price at which this position would close the
+              account. The one number a funded trader should see before sizing up. */}
+          {sizeWei > 0n && mandate.state.status === 1 && (() => {
+            const mid = (quote.buy + quote.sell) / 2n;
+            const sym = MARKETS.find((m) => m.id === marketId)?.symbol ?? "";
+            const long = previewBreach({isLong: true, sizeWei, fill: quote.buy, mid, headroom: mandate.headroom});
+            const short = previewBreach({isLong: false, sizeWei, fill: quote.sell, mid, headroom: mandate.headroom});
+            const pct = (x: number) => `${(((x - Number(mid) / 1e8) / (Number(mid) / 1e8)) * 100).toFixed(1)}%`;
+            return (
+              <div className="mt-2 space-y-0.5 border-t border-edge pt-2">
+                <div className="text-txt-lo">Would close the account at</div>
+                <div className="flex justify-between">
+                  <span className="num text-txt-mid">
+                    long: {long ? <span className="text-down">{sym} ≈ {px(long)} ({pct(long)})</span> : <span className="text-down">on entry</span>}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="num text-txt-mid">
+                    short: {short ? <span className="text-down">{sym} ≈ {px(short)} (+{pct(short).replace("-", "")})</span> : <span className="text-down">on entry</span>}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

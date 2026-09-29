@@ -20,6 +20,7 @@ import {isConfigured} from "@/lib/chain";
 import {useSession} from "@/lib/useSession";
 import {toNum, fmtUsd, fmtSigned, fmtSize, fmtPrice} from "@/lib/format";
 import type {Mandate} from "@/lib/data";
+import {breachPrice, px} from "@/lib/breach";
 
 /**
  * The client area.
@@ -173,7 +174,7 @@ function Positions({mandate}: {mandate: Mandate}) {
         <Empty>Flat. Nothing is riding on the next tick.</Empty>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[620px] text-xs">
+          <table className="w-full min-w-[720px] text-xs">
             <thead>
               <tr className="border-b border-edge text-2xs uppercase tracking-wider text-txt-lo">
                 <th className="px-4 py-2 text-left font-medium">Market</th>
@@ -181,6 +182,7 @@ function Positions({mandate}: {mandate: Mandate}) {
                 <th className="px-4 py-2 text-right font-medium">Entry</th>
                 <th className="px-4 py-2 text-right font-medium">Mark</th>
                 <th className="px-4 py-2 text-right font-medium">Margin</th>
+                <th className="px-4 py-2 text-right font-medium" title="The price at which this position alone takes equity to the floor">Closes at</th>
                 <th className="px-4 py-2 text-right font-medium">Unrealised</th>
               </tr>
             </thead>
@@ -201,6 +203,12 @@ function Positions({mandate}: {mandate: Mandate}) {
                   <td className="num px-4 py-2.5 text-right text-txt-mid">{fmtPrice(p.entryPrice)}</td>
                   <td className="num px-4 py-2.5 text-right text-txt-hi">{fmtPrice(p.markPrice)}</td>
                   <td className="num px-4 py-2.5 text-right text-txt-mid">{fmtUsd(p.margin)}</td>
+                  <td className="num px-4 py-2.5 text-right text-down">
+                    {(() => {
+                      const b = breachPrice(p, mandate.headroom);
+                      return b ? `≈ ${px(b)}` : "—";
+                    })()}
+                  </td>
                   <td className="px-4 py-2.5 text-right">
                     {/* The number that moves. Boxed so it reads as a live cell rather than
                         one more figure in a row of static ones. */}

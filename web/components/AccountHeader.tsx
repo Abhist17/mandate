@@ -6,6 +6,7 @@ import {registryAbi} from "@/lib/abi";
 import {ADDR} from "@/lib/chain";
 import {fmtUsd, fmtSigned, toNum} from "@/lib/format";
 import {BREACH_KIND} from "@/lib/chain";
+import {breachPrice, px} from "@/lib/breach";
 import type {Mandate} from "@/lib/data";
 
 /**
@@ -81,6 +82,18 @@ export function AccountHeader({mandate}: {mandate: Mandate}) {
             <span>{active ? `${(bps / 100).toFixed(2)}% of equity` : BREACH_KIND[state.breachKind]}</span>
             {/* The biggest number on the screen is the one most worth doubting, so it is
                 the one that carries the check. */}
+            {active && mandate.positions.length > 0 && (
+              <span className="num text-down/90">
+                closes at{" "}
+                {mandate.positions
+                  .map((p) => {
+                    const b = breachPrice(p, mandate.headroom);
+                    return b ? `${p.symbol} ≈ ${px(b)}` : null;
+                  })
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            )}
             <ProofChip
               spec={{
                 title: "Distance to floor",
