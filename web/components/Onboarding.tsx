@@ -96,6 +96,9 @@ export function Onboarding({mandates}: {mandates: Mandate[]}) {
   const doneCount = steps.filter((s) => s.done).length;
   const complete = doneCount === steps.length;
 
+  // A mandate that has ended is not "step 4: place a trade". The dashboard's settled-mandate
+  // card takes over from here, pointing at the record and the offers it unlocks.
+  if (hasMandate && !active) return null;
   if (dismissed || complete) return null;
 
   const current = steps.find((s) => !s.done);

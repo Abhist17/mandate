@@ -26,7 +26,7 @@ import {isConfigured} from "@/lib/chain";
  * six accounts they do not own answers a question they did not ask.
  */
 const PLAIN = (path: string) =>
-  path === "/" || path.startsWith("/demo") || path.startsWith("/m/");
+  path === "/" || path.startsWith("/demo") || path.startsWith("/m/") || path.startsWith("/trader/");
 
 export function Frame({children}: {children: React.ReactNode}) {
   const path = usePathname();

@@ -75,7 +75,9 @@ export default async function PublicMandatePage({params}: Params) {
           >
             {m.status}
           </span>
-          <span className="num ml-auto text-2xs text-txt-lo">{shortAddr(m.trader)}</span>
+          <Link href={`/trader/${m.trader}`} className="num ml-auto text-2xs text-txt-lo underline decoration-ink-600 underline-offset-2 hover:text-txt-hi">
+            {shortAddr(m.trader)} · passport
+          </Link>
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-5 px-5 py-5 sm:grid-cols-4">

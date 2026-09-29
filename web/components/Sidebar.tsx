@@ -24,6 +24,7 @@ const NAV = [
   {href: "/trade", label: "Account overview", icon: GaugeIcon},
   {href: "/enforce", label: "Bounty board", icon: BoltIcon},
   {href: "/market", label: "Underwriting", icon: BookIcon},
+  {href: "/traders", label: "Traders", icon: UsersIcon},
   {href: "/lp", label: "Liquidity", icon: LayersIcon},
 ];
 
@@ -160,6 +161,16 @@ function BoltIcon() {
   return (
     <svg {...S} className="shrink-0">
       <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg {...S} className="shrink-0">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19c.8-3 3-4.6 5.5-4.6s4.7 1.6 5.5 4.6" />
+      <path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.8c1.4.6 2.3 1.9 2.7 4.2" />
     </svg>
   );
 }

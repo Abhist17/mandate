@@ -10,7 +10,7 @@ export function Nav() {
 
   // The public mandate page is a standalone document with its own header and its own
   // call to action. App chrome on it just offers a stranger three places to get lost.
-  if (path.startsWith("/m/")) return null;
+  if (path.startsWith("/m/") || path.startsWith("/trader/")) return null;
 
   const tabs = [
     {href: "/trade", label: "Trade"},

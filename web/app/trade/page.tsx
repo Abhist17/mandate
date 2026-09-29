@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect, useState} from "react";
+import Link from "next/link";
 import {EquityChart} from "@/components/EquityChart";
 import {ChartControls, type Unit} from "@/components/ChartControls";
 import {TradePanel} from "@/components/TradePanel";
@@ -246,10 +247,38 @@ function ClaimBanner({
   const [dismissed, setDismissed] = useState(false);
   if (!address || dismissed) return null;
 
-  const owns = mandates.some(
-    (m) => m.state.trader.toLowerCase() === address.toLowerCase() && m.state.status === 1,
-  );
-  if (owns) return null;
+  const mine = mandates.filter((m) => m.state.trader.toLowerCase() === address.toLowerCase());
+  if (mine.some((m) => m.state.status === 1)) return null;
+
+  // Had a mandate, and it has ended. Offering the claim form again only ends in "this
+  // address already claimed" — a dead end. The real next step is the record that settlement
+  // just wrote, and the backers' offers it now qualifies for.
+  const ended = mine.find((m) => m.state.status !== 1);
+  if (ended) {
+    const breached = ended.state.status === 2;
+    return (
+      <div className="panel mx-auto max-w-2xl p-5">
+        <div className={`text-2xs font-semibold uppercase tracking-[0.14em] ${breached ? "text-down" : "text-up"}`}>
+          Mandate #{ended.id.toString()} {breached ? "was closed by the contract" : "has settled"}
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-txt-mid">
+          {breached
+            ? "The breach is on your record now — written by the contract, in the same transaction that closed the account. So is everything else you did."
+            : "Settlement wrote it to your record, which backers' offers read directly."}{" "}
+          Your record is the application for the next mandate: see which offers it already
+          qualifies for, and exactly what the next one needs.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href={`/trader/${address}`} className="rounded-lg bg-acc px-4 py-2 text-xs font-semibold text-white hover:bg-acc-hi">
+            Open your passport
+          </Link>
+          <Link href="/market" className="btn">
+            Browse offers
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-1.5">

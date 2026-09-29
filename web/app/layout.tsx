@@ -59,7 +59,7 @@ const MOTION_SWITCH = `try{
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
     d.setAttribute('data-motion','on');
     var p=location.pathname;
-    if(!sessionStorage.getItem('mandate.intro')&&p.indexOf('/m/')!==0&&p.indexOf('/demo')!==0){
+    if(!sessionStorage.getItem('mandate.intro')&&p.indexOf('/m/')!==0&&p.indexOf('/trader/')!==0&&p.indexOf('/demo')!==0){
       sessionStorage.setItem('mandate.intro','1');
       d.setAttribute('data-intro','on');
       window.__introEnd=setTimeout(function(){d.removeAttribute('data-intro')},2450);

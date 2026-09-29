@@ -62,6 +62,9 @@ export function Crumb({mandate}: {mandate: Mandate}) {
         <Chip href={explorerAddr(mandate.state.account)}>
           <ChainIcon /> Verify onchain
         </Chip>
+        <Chip href={`/trader/${mandate.state.trader}`} internal>
+          <ShareIcon /> Trader passport
+        </Chip>
 
         <span className="ml-auto flex items-center gap-1.5 text-2xs text-txt-lo">
           <span className="live-dot h-1.5 w-1.5 rounded-full bg-up" />
@@ -80,17 +83,19 @@ function Chip({
   children,
   onClick,
   href,
+  internal = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   href?: string;
+  internal?: boolean;
 }) {
   const cls =
     "inline-flex items-center gap-1.5 rounded-full border border-edge bg-ink-900 px-3 py-1.5 text-2xs " +
     "text-txt-mid transition-colors hover:border-edge-hi hover:bg-ink-850 hover:text-txt-hi";
   if (href) {
     return (
-      <a href={href} target="_blank" rel="noreferrer" className={cls}>
+      <a href={href} target={internal ? undefined : "_blank"} rel="noreferrer" className={cls}>
         {children}
       </a>
     );
