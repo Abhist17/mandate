@@ -304,6 +304,8 @@ export function MandateSim() {
         <div className="divide-y divide-edge text-xs">
           <Row k="Allocated from LP vault" v={usd(ALLOC, 0)} />
           <Row k="Floor set by" v={BINDING[i] === "daily" ? "daily limit" : "trailing drawdown"} />
+          {/* 0.25% of the allocation — the deployed enforcement bounty — to whoever enforces it. */}
+          <Row k="Enforcer's bounty if it breaches" v={usd(ALLOC * 0.0025, 0)} />
           <div className="px-4 py-2.5">
             <div className="flex items-baseline justify-between">
               <span className="text-txt-mid">Split if paid now</span>

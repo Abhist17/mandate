@@ -24,14 +24,20 @@ const LiveTape = dynamic(() => import("@/components/landing/LiveTape").then((m) 
   ),
 });
 
+const EnforcementPreview = dynamic(
+  () => import("@/components/landing/EnforcementPreview").then((m) => m.EnforcementPreview),
+  {ssr: false, loading: () => <div className="h-[252px] rounded-xl border border-edge bg-ink-900" aria-hidden="true" />},
+);
+
 /**
  * The front door, told as one loop.
  *
  *   01  capital in       — the engine: vault to mandate to trader, and the split back
  *   02  enforced         — living under the rules: the floor ratchets, lights, holds
  *   03  closed           — a real breach, recorded on chain: what crossing it does
- *   04  funded           — how a clean record turns into backed capital
- *   05  verify           — the three claims, each one checkable
+ *   04  paid             — the enforcement market: whoever enforces is paid for it
+ *   05  funded           — how a clean record turns into backed capital
+ *   06  verify           — the claims, each one checkable
  *
  * Motion carries the argument rather than decorating it. Every animated element is a step
  * the protocol actually performs, and each section explains itself before it moves. The
@@ -123,10 +129,42 @@ export default function Landing() {
         </p>
       </section>
 
-      {/* ── 04 · from record to capital ──────────────────────────────────────── */}
-      <section data-rail="04" data-rail-label="Funded" className="space-y-6">
+      {/* ── 04 · the enforcement market ─────────────────────────────────────── */}
+      <section data-rail="04" data-rail-label="Paid" className="space-y-6">
         <SectionHead
           index="04"
+          kicker="The enforcement market"
+          title="And whoever enforced it was paid."
+          body="Lending protocols never trusted a liquidator — they paid a bonus and let searchers race for it. Mandate does the same for a rulebook: the first wallet to enforce a breach earns a share of the allocation, out of the capital it protects. The rules are enforced by whoever gets there first, not by us."
+        />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <Reveal wipe delay={100}>
+            <EnforcementPreview />
+          </Reveal>
+          <Reveal delay={200}>
+            <div className="h-full rounded-xl border border-edge bg-ink-950/60 p-4">
+              <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo">A searcher&rsquo;s whole job</div>
+              <pre className="num mt-3 overflow-x-auto text-[0.68rem] leading-relaxed text-txt-mid">
+{`for id in registry.activeMandates():
+  ok, rule, _, _, bounty =
+    registry.previewEnforce(id)
+  if ok:
+    registry.markAndEnforce(id)`}
+              </pre>
+              <p className="mt-3 text-2xs leading-relaxed text-txt-lo">
+                One transaction flattens the book, settles the split and pays the enforcer. The
+                trader can never be paid for their own breach, and the bounty never touches their
+                share.
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 05 · from record to capital ──────────────────────────────────────── */}
+      <section data-rail="05" data-rail-label="Funded" className="space-y-6">
+        <SectionHead
+          index="05"
           kicker="The path"
           title="A clean record is the application."
           body="No evaluator and no fee. Settle a starter mandate without breaching and the contract writes your record; a backer's standing offer accepts it on its own terms, and the capital moves."
@@ -135,8 +173,8 @@ export default function Landing() {
       </section>
 
       {/* ── 05 · the claims ──────────────────────────────────────────────────── */}
-      <section data-rail="05" data-rail-label="Verify" className="space-y-6">
-        <SectionHead index="05" kicker="Checkable" title="Three claims. Each one is a function you can call." />
+      <section data-rail="06" data-rail-label="Verify" className="space-y-6">
+        <SectionHead index="06" kicker="Checkable" title="Three claims. Each one is a function you can call." />
         <div className="grid gap-3 sm:grid-cols-3">
           <Claim
             delay={0}
