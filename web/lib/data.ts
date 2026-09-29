@@ -336,24 +336,57 @@ export function usePolled<T>(
 }
 
 /**
- * Age of the BTC price feed in seconds, per the chain's own clock. Undefined until known.
+ * The price feed: how old it is, and how old the contracts will let it get.
  *
- * Every trading path reverts on a stale feed, so anything that submits an order should
- * disable itself well before the cutoff rather than let the user sign a transaction the
- * contract is certain to refuse.
+ * Every trading and marking path reverts on a stale feed, so anything that submits an order
+ * must stop well before the cutoff rather than let someone sign a transaction the contract
+ * is certain to refuse. The cutoff used to be hard-coded at ten minutes — the live
+ * deployment's bound. A fresh deploy enforces sixty seconds, so the trade button stayed
+ * live from 60s to 570s while every order in that window reverted: the dashboard and the
+ * contract disagreeing, on the one screen whose claim is that they cannot. The bound is on
+ * chain, so it is read from chain — the tighter of MiniPerp's maxPriceAge and the
+ * registry's maxMarkAge.
+ *
+ * Between polls the feed keeps ageing, so the age is extrapolated on the local clock; a
+ * sixty-second bound cannot afford to be read five seconds late.
  */
-export function useFeedAge(): number | undefined {
+export type Feed = {age: number; limit: number};
+
+const boundsAbi = [
+  {type: "function", name: "maxPriceAge", inputs: [], outputs: [{type: "uint64"}], stateMutability: "view"},
+  {type: "function", name: "maxMarkAge", inputs: [], outputs: [{type: "uint64"}], stateMutability: "view"},
+] as const;
+
+export function useFeed(): Feed | undefined {
   const {data} = usePolled(async () => {
-    const [[, publishedAt], block] = await Promise.all([
+    const [[, publishedAt], block, perpBound, markBound] = await Promise.all([
       publicClient.readContract({
         address: ADDR.oracle, abi: oracleAbi, functionName: "price", args: [16],
       }) as Promise<readonly [bigint, bigint]>,
       publicClient.getBlock({blockTag: "latest"}),
+      publicClient.readContract({address: ADDR.venue, abi: boundsAbi, functionName: "maxPriceAge"}),
+      publicClient.readContract({address: ADDR.registry, abi: boundsAbi, functionName: "maxMarkAge"}),
     ]);
-    return Number(block.timestamp - publishedAt);
-  }, 10_000);
-  return data;
+    return {
+      age: Number(block.timestamp - publishedAt),
+      limit: Math.min(Number(perpBound), Number(markBound)),
+      at: Date.now(),
+    };
+  }, 5_000);
+
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => tick((n) => n + 1), 1_000);
+    return () => clearInterval(i);
+  }, []);
+
+  if (!data) return undefined;
+  return {age: data.age + (Date.now() - data.at) / 1000, limit: data.limit};
 }
 
-/** The live deployment's staleness bound. Trades disable a little before it. */
-export const FEED_STALE_AT = 600;
+/** Orders stop here: a margin before the bound, so a transaction in flight still lands inside it. */
+export const feedCutoff = (limit: number) => limit - Math.max(8, limit * 0.1);
+
+/** The warning starts here. Above the keeper's refresh (half the bound, plus a loop), so a
+ *  healthy feed never shows it. */
+export const feedWarnAt = (limit: number) => limit * 0.75;

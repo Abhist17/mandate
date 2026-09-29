@@ -6,7 +6,7 @@ import {accountAbi, venueExtraAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
 import {fmtPrice, fmtUsd} from "@/lib/format";
-import {useFeedAge, FEED_STALE_AT, type Mandate} from "@/lib/data";
+import {useFeed, feedCutoff, type Mandate} from "@/lib/data";
 
 /**
  * Order entry.
@@ -25,10 +25,10 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
 
   const isTrader = address?.toLowerCase() === mandate.state.trader.toLowerCase();
   const active = mandate.state.status === 1;
-  const feedAge = useFeedAge();
+  const feed = useFeed();
   // Refuse to submit into a stale feed: the contract would revert, the user would pay gas for
   // nothing, and it would look like the app failed. Disable early, with the reason.
-  const feedStale = feedAge !== undefined && feedAge >= FEED_STALE_AT - 30;
+  const feedStale = feed !== undefined && feed.age >= feedCutoff(feed.limit);
   const sizeWei = (() => {
     const n = Number(size);
     return Number.isFinite(n) && n > 0 ? BigInt(Math.round(n * 1e18)) : 0n;
@@ -186,9 +186,9 @@ export function TradePanel({mandate, onDone}: {mandate: Mandate; onDone: () => v
 
       {feedStale && (
         <p className="rounded-lg border border-down/30 bg-down/[0.07] px-2.5 py-2 text-2xs leading-relaxed text-down">
-          Trading is paused — the price feed is {Math.floor((feedAge ?? 0) / 60)} minutes old and
-          the contract refuses orders against a stale price. Not something you did; the keeper
-          needs to refresh it.
+          Trading is paused — the price feed is {Math.floor(feed?.age ?? 0)}s old and the
+          contract accepts at most {feed?.limit}s. Not something you did; the keeper needs to
+          refresh it.
         </p>
       )}
 

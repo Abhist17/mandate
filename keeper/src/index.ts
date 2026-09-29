@@ -48,6 +48,17 @@ const store = new MarkStore(cfg.storePath);
 /** Last price pushed per market, so a flat market does not cost a transaction every block. */
 const lastPushed = new Map<number, {onchain: bigint; at: number}>();
 
+/**
+ * How often a flat market's price is refreshed. Starts at the configured interval and is
+ * capped at startup to half the tightest staleness bound the contracts actually enforce.
+ *
+ * The configured value alone was not safe: a fresh local deploy enforces 60s in both
+ * MiniPerp and the registry, while the refresh was set for the live deployment's 600s — so
+ * the feed spent three minutes of every four too old to trade on, and every order in that
+ * window reverted. The bound is on chain; the keeper reads it rather than assuming it.
+ */
+let priceRefreshMs = cfg.maxPriceAgeMs;
+
 let consecutiveFailures = 0;
 let running = true;
 
@@ -72,7 +83,7 @@ function pricesWorthPushing(prices: MarketPrice[]): MarketPrice[] {
   return prices.filter((p) => {
     const prev = lastPushed.get(p.id);
     if (!prev) return true;
-    if (now - prev.at >= cfg.maxPriceAgeMs) return true;
+    if (now - prev.at >= priceRefreshMs) return true;
     if (prev.onchain === 0n) return true;
     const diff = p.onchain > prev.onchain ? p.onchain - prev.onchain : prev.onchain - p.onchain;
     return (diff * 10_000n) / prev.onchain >= BigInt(cfg.minPriceMoveBps);
@@ -266,6 +277,34 @@ async function main(): Promise<void> {
     batch: cfg.maxBatch,
   });
 
+  // The contracts' own staleness bounds decide how often prices must be refreshed.
+  try {
+    const bounds = await Promise.all([
+      publicClient.readContract({
+        address: cfg.venue,
+        abi: [{type: "function", name: "maxPriceAge", inputs: [], outputs: [{type: "uint64"}], stateMutability: "view"}] as const,
+        functionName: "maxPriceAge",
+      }),
+      publicClient.readContract({
+        address: cfg.registry,
+        abi: [{type: "function", name: "maxMarkAge", inputs: [], outputs: [{type: "uint64"}], stateMutability: "view"}] as const,
+        functionName: "maxMarkAge",
+      }),
+    ]);
+    const tightest = Number(bounds[0] < bounds[1] ? bounds[0] : bounds[1]);
+    const cap = tightest * 500; // half the bound, in ms
+    if (cap < priceRefreshMs) {
+      log.warn("price refresh capped by the onchain staleness bound", {
+        configured: `${cfg.maxPriceAgeMs / 1000}s`,
+        bound: `${tightest}s`,
+        refresh: `${cap / 1000}s`,
+      });
+      priceRefreshMs = cap;
+    }
+  } catch (e) {
+    log.warn("could not read staleness bounds; using the configured refresh", {err: String(e).slice(0, 120)});
+  }
+
   const balance = await publicClient.getBalance({address: account.address});
   log.info("keeper balance", {mon: formatEther(balance)});
   if (balance === 0n) {
@@ -328,7 +367,7 @@ async function demandLoop(): Promise<void> {
   log.info("demand mode", {
     watchEvery: `${cfg.watchIntervalMs / 1000}s`,
     routineMarkEvery: `${cfg.routineMarkIntervalMs / 60_000}m`,
-    priceRefreshEvery: `${cfg.maxPriceAgeMs / 60_000}m or ${cfg.minPriceMoveBps}bp move`,
+    priceRefreshEvery: `${priceRefreshMs / 1000}s or ${cfg.minPriceMoveBps}bp move`,
   });
 
   while (running) {

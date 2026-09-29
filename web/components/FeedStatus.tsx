@@ -1,8 +1,7 @@
 "use client";
 
-import {publicClient, ADDR, isConfigured} from "@/lib/chain";
-import {oracleAbi} from "@/lib/abi";
-import {usePolled} from "@/lib/data";
+import {isConfigured} from "@/lib/chain";
+import {usePolled, useFeed, feedCutoff, feedWarnAt} from "@/lib/data";
 
 /**
  * Is trading actually possible right now?
@@ -41,30 +40,18 @@ export function FeedStatus() {
     }
   }, 30_000);
 
-  const {data} = usePolled(async () => {
-    if (!isConfigured) return undefined;
-    const [[, publishedAt], block] = await Promise.all([
-      publicClient.readContract({
-        address: ADDR.oracle, abi: oracleAbi, functionName: "price", args: [16],
-      }) as Promise<readonly [bigint, bigint]>,
-      publicClient.getBlock({blockTag: "latest"}),
-    ]);
-    // Staleness is measured against the chain's clock, because that is what the contract uses.
-    const ageSeconds = Number(block.timestamp - publishedAt);
-    return {ageSeconds};
-  }, 10_000);
-
-  if (!data) return null;
-
-  // The live deployment's bound is 600s; the fork's is 60s. Warn well before either, since
-  // the keeper refreshes on a schedule and a warning that fires at the exact cutoff is a
-  // warning that fires after the trade already failed.
-  const STALE_AT = 600;
-  const WARN_AT = 420;
+  // Same source, same thresholds as the trade button — so the banner and the button can
+  // never disagree about whether trading is paused. Both come from the contracts' own bound.
+  const feed = useFeed();
+  if (!isConfigured || !feed) return null;
+  const data = {ageSeconds: feed.age};
+  const STALE_AT = feedCutoff(feed.limit);
+  const WARN_AT = feedWarnAt(feed.limit);
   if (data.ageSeconds < WARN_AT) return null;
 
   const stale = data.ageSeconds >= STALE_AT;
-  const mins = Math.floor(data.ageSeconds / 60);
+  // Seconds under two minutes: against a sixty-second bound, "0m ago" says nothing.
+  const ago = data.ageSeconds < 120 ? `${Math.floor(data.ageSeconds)}s` : `${Math.floor(data.ageSeconds / 60)}m`;
 
   return (
     <div
@@ -80,7 +67,7 @@ export function FeedStatus() {
         <span className={`text-xs font-semibold uppercase tracking-[0.12em] ${stale ? "text-down" : "text-warn"}`}>
           {stale ? "Trading paused — price feed is stale" : "Price feed is getting old"}
         </span>
-        <span className="num text-2xs text-txt-lo">last price {mins}m ago</span>
+        <span className="num text-2xs text-txt-lo">last price {ago} ago</span>
       </div>
       <p className="mt-1.5 max-w-3xl text-2xs leading-relaxed text-txt-mid">
         {stale ? (
