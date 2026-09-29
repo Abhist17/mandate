@@ -1,4 +1,4 @@
-.PHONY: help install build test coverage fmt snapshot deploy-testnet keeper keeper-sim web indexer demo seed clean
+.PHONY: help install build test coverage fmt snapshot deploy-testnet keeper keeper-sim web indexer demo seed clean e2e
 
 FOUNDRY := $(HOME)/.foundry/bin
 export PATH := $(FOUNDRY):$(PATH)
@@ -98,6 +98,9 @@ spike: ## Re-verify the Phase 1 claims against live Perpl and Pyth endpoints
 
 smoke: ## Render the app in a real browser and fail on any console error
 	node scripts/smoke-web.mjs
+
+e2e: ## Play a trader, a paid searcher and an LP through the real UI against the local stack
+	set -a; . ./.env; set +a; node scripts/e2e.mjs
 
 auth-check: ## Exercise the sign-in flow and every replay/forgery path it must refuse
 	npx tsx scripts/auth-check.mts

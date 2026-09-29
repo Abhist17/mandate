@@ -357,6 +357,7 @@ interval) and marks against Perpl's own oracle. Full reasoning in
 
 ```bash
 make test        # 261 tests
+make e2e         # a trader, a paid searcher and an LP, through the real UI, checked on chain
 make auth-check  # sign-in flow + every replay and forgery path it must refuse
 make coverage    # RiskEngine 99%, MandateRegistry 100%, 95%+ across src/
 make smoke       # renders both pages in a real browser, fails on any console error
