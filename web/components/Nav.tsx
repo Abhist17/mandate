@@ -14,6 +14,7 @@ export function Nav() {
 
   const tabs = [
     {href: "/trade", label: "Trade"},
+    {href: "/enforce", label: "Bounties"},
     {href: "/market", label: "Market"},
     {href: "/lp", label: "Liquidity"},
   ];

@@ -246,7 +246,9 @@ export function MandateSim() {
                 <stop offset="0%" stopColor="#00e39b" stopOpacity={near ? 0.14 : 0.24} />
                 <stop offset="100%" stopColor="#00e39b" stopOpacity="0.02" />
               </linearGradient>
-              <filter id="ms-glow" x="-20%" y="-200%" width="140%" height="500%">
+              {/* User space: a floor that has not ratcheted yet is a flat line, and a flat
+                  line's zero-height box makes a box-relative filter region empty. */}
+              <filter id="ms-glow" filterUnits="userSpaceOnUse" x="0" y="0" width={VW} height={VH}>
                 <feGaussianBlur stdDeviation="3" result="b" />
                 <feMerge>
                   <feMergeNode in="b" />

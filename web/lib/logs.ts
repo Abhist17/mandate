@@ -1,6 +1,6 @@
 "use client";
 
-import type {AbiEvent, Address, GetLogsReturnType} from "viem";
+import type {AbiEvent, Address, GetLogsReturnType, Log} from "viem";
 import {publicClient} from "./chain";
 
 /**
@@ -74,4 +74,31 @@ export async function walkLogs<E extends AbiEvent>(opts: {
     Number((a.blockNumber ?? 0n) - (b.blockNumber ?? 0n)) ||
     Number((a.logIndex ?? 0) - (b.logIndex ?? 0)),
   );
+}
+
+/**
+ * Every log a contract emitted in the recent window, undecoded. For callers that want several
+ * event types at once: one request per window instead of one per window per event.
+ */
+export async function walkRegistryLogs(address: Address, windows = 40n): Promise<Log[]> {
+  const head = await publicClient.getBlockNumber();
+  const span = RPC_MAX_LOG_SPAN * windows;
+  const earliest = head > span ? head - span : 0n;
+  const ranges: {from: bigint; to: bigint}[] = [];
+  for (let to = head; to > earliest; ) {
+    const from = to > earliest + RPC_MAX_LOG_SPAN ? to - RPC_MAX_LOG_SPAN + 1n : earliest;
+    ranges.push({from, to});
+    if (from === earliest) break;
+    to = from - 1n;
+  }
+  const out: Log[] = [];
+  for (let i = 0; i < ranges.length; i += CONCURRENCY) {
+    const got = await Promise.all(
+      ranges.slice(i, i + CONCURRENCY).map((w) =>
+        publicClient.getLogs({address, fromBlock: w.from, toBlock: w.to}).catch(() => [] as Log[]),
+      ),
+    );
+    for (const logs of got) out.push(...(logs as Log[]));
+  }
+  return out;
 }

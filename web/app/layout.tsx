@@ -18,6 +18,7 @@ const display = Instrument_Serif({
 import {Nav} from "@/components/Nav";
 import {Frame} from "@/components/Frame";
 import {ToastProvider} from "@/components/Toast";
+import {Intro} from "@/components/Intro";
 
 export const metadata: Metadata = {
   // Absolute URLs for share cards. Without it Next falls back to localhost and every
@@ -43,15 +44,28 @@ export const viewport = {
 };
 
 /**
- * Runs before first paint. Scroll reveals hide content until it is on screen, and doing
+ * Runs before first paint. It also decides the opening sequence: once a session, never under
+ * reduced motion, never for a shared mandate link or presentation mode — and it schedules the
+ * sequence's own end, so the page is never left behind the intro if the app fails to load.
+ *
+ * Scroll reveals hide content until it is on screen, and doing
  * that from a React effect would paint everything, hide it, then reveal it — a flash on
  * every load. Setting the switch here means content is hidden from the first frame when
  * motion is wanted, and never hidden at all when it is not: no JS, reduced motion, or a
  * crawler all see the page in its final state.
  */
-const MOTION_SWITCH =
-  "try{if(!matchMedia('(prefers-reduced-motion: reduce)').matches)" +
-  "document.documentElement.setAttribute('data-motion','on')}catch(e){}";
+const MOTION_SWITCH = `try{
+  var d=document.documentElement;
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    d.setAttribute('data-motion','on');
+    var p=location.pathname;
+    if(!sessionStorage.getItem('mandate.intro')&&p.indexOf('/m/')!==0&&p.indexOf('/demo')!==0){
+      sessionStorage.setItem('mandate.intro','1');
+      d.setAttribute('data-intro','on');
+      window.__introEnd=setTimeout(function(){d.removeAttribute('data-intro')},2450);
+    }
+  }
+}catch(e){}`;
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
@@ -62,6 +76,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         <script dangerouslySetInnerHTML={{__html: MOTION_SWITCH}} />
       </head>
       <body className={`${display.variable} min-h-screen bg-ink-980`}>
+        <Intro />
         <ToastProvider>
           <Nav />
           <Frame>{children}</Frame>

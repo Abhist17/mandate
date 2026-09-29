@@ -189,6 +189,35 @@ export const registryAbi = [
   },
   {
     type: "function",
+    name: "previewEnforce",
+    inputs: [{name: "mandateId", type: "uint256"}],
+    outputs: [
+      {name: "enforceable", type: "bool"},
+      {name: "breach", type: "uint8"},
+      {name: "equity", type: "uint256"},
+      {name: "floor", type: "uint256"},
+      {name: "bounty", type: "uint256"},
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "enforcementBountyBps",
+    inputs: [],
+    outputs: [{type: "uint16"}],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "EnforcementBountyPaid",
+    inputs: [
+      {name: "mandateId", type: "uint256", indexed: true},
+      {name: "enforcer", type: "address", indexed: true},
+      {name: "amount", type: "uint256", indexed: false},
+    ],
+  },
+  {
+    type: "function",
     name: "positionCapOf",
     inputs: [{name: "mandateId", type: "uint256"}],
     outputs: [{type: "uint256"}],

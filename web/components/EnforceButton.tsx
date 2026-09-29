@@ -5,6 +5,7 @@ import {ADDR, awaitTx, sendTx, describeRevert} from "@/lib/chain";
 import {registryAbi} from "@/lib/abi";
 import {useWallet} from "@/lib/useWallet";
 import {useToast} from "@/components/Toast";
+import {usePreview, BREACH_RULE} from "@/lib/enforce";
 import type {Mandate} from "@/lib/data";
 
 /**
@@ -16,17 +17,23 @@ import type {Mandate} from "@/lib/data";
  * allowlist, no keeper.
  *
  * A prop firm cannot offer this button, because on their side enforcement is a decision.
- * Here it is arithmetic anyone can execute.
+ * Here it is arithmetic anyone can execute — and, since the enforcement market, paid: the
+ * contract gives whoever enforces a share of the allocation, out of the capital it protects.
+ * The amount shown is the contract's own preview for this wallet.
  */
 export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () => void}) {
   const {address, client, wrongChain, connect, available} = useWallet();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
-  // Live equity is under the floor, but the mandate is still Active — so a mark right now
-  // would end it. That is precisely the window this button exists for.
-  const enforceable = mandate.state.status === 1 && mandate.liveEquity < mandate.floor;
+  // The contract's own verdict, for this wallet: whether a mark now terminates the mandate
+  // (this also catches expiry, which an equity-below-floor check cannot see) and what it
+  // pays. The local check is only a fast path while the preview loads.
+  const preview = usePreview(mandate.state.status === 1 ? mandate.id : undefined, address);
+  const enforceable =
+    mandate.state.status === 1 && (preview ? preview.enforceable : mandate.liveEquity < mandate.floor);
   if (!enforceable) return null;
+  const isTrader = address?.toLowerCase() === mandate.state.trader.toLowerCase();
 
   const shortfall = mandate.floor - mandate.liveEquity;
 
@@ -79,16 +86,24 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 animate-pulse rounded-full bg-down" />
         <span className="text-2xs font-semibold uppercase tracking-[0.12em] text-down">
-          Below the floor · enforceable now
+          {preview && preview.rule === 3 ? "Expired" : "Below the floor"} · enforceable now
         </span>
+        {preview && preview.bounty > 0n && (
+          <span className="num ml-auto rounded-md border border-up/40 bg-up/10 px-2 py-0.5 text-2xs font-semibold text-up">
+            bounty {usd(preview.bounty)}
+          </span>
+        )}
       </div>
 
       <p className="mt-2 text-xs leading-relaxed text-txt-mid">
         Mandate #{mandate.id.toString()} is{" "}
         <span className="num text-down">{usd(shortfall)}</span> under its drawdown floor and has
-        not been marked yet.{" "}
+        not been marked yet{preview ? ` — ${BREACH_RULE[preview.rule]?.toLowerCase()}` : ""}.{" "}
         <span className="text-txt-hi">Anyone can end it right now</span> — this button calls the
-        same public function the keeper calls. You need no role and no permission.
+        same public function the keeper calls. You need no role and no permission.{" "}
+        {isTrader
+          ? "It is your own mandate, so enforcing it pays you nothing: nobody earns from their own breach."
+          : "The contract pays whoever does it, out of the capital the enforcement protects."}
       </p>
 
       {!available ? (
@@ -103,7 +118,11 @@ export function EnforceButton({mandate, onDone}: {mandate: Mandate; onDone: () =
           disabled={busy || wrongChain}
           className="btn btn-down mt-3 w-full font-semibold"
         >
-          {busy ? "Enforcing…" : "Enforce this breach"}
+          {busy
+            ? "Enforcing…"
+            : preview && preview.bounty > 0n
+              ? `Enforce this breach · earn ${usd(preview.bounty)}`
+              : "Enforce this breach"}
         </button>
       )}
 

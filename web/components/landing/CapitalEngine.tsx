@@ -230,7 +230,9 @@ export function CapitalEngine() {
         aria-label="Diagram: LP capital flows from the vault into a mandate contract, which checks drawdown, daily-loss and position rules, funds a trader, receives profit back, and splits it 95% to the trader and 5% to LPs."
       >
         <defs>
-          <filter id="ce-glow" x="-50%" y="-50%" width="200%" height="200%">
+          {/* User space: the floor is a horizontal line, whose zero-height bounding box
+              makes a box-relative filter region empty. */}
+          <filter id="ce-glow" filterUnits="userSpaceOnUse" x="0" y="0" width="1000" height="400">
             <feGaussianBlur stdDeviation="3" result="b" />
             <feMerge>
               <feMergeNode in="b" />

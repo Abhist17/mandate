@@ -22,6 +22,7 @@ import type {Mandate} from "@/lib/data";
 
 const NAV = [
   {href: "/trade", label: "Account overview", icon: GaugeIcon},
+  {href: "/enforce", label: "Bounty board", icon: BoltIcon},
   {href: "/market", label: "Underwriting", icon: BookIcon},
   {href: "/lp", label: "Liquidity", icon: LayersIcon},
 ];
@@ -151,6 +152,14 @@ function GaugeIcon() {
       <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
       <path d="m13.4 10.6 3.6-3.6" />
       <path d="M4.2 18a9 9 0 1 1 15.6 0" />
+    </svg>
+  );
+}
+
+function BoltIcon() {
+  return (
+    <svg {...S} className="shrink-0">
+      <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
     </svg>
   );
 }

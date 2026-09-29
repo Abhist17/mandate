@@ -314,6 +314,78 @@ html[data-motion="on"] .reveal.done {
   to   { transform: scaleX(1); }
 }
 
+/* ── the opening ──────────────────────────────────────────────────────────────
+   The floor draws, equity climbs above it, the band fills, one settlement ring, the name,
+   and the frame lifts. Switched on by the pre-paint script (once a session, never under
+   reduced motion), which also schedules its end — so it finishes without React. */
+.intro { display: none; }
+html[data-intro] .intro {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  justify-content: center;
+  align-items: flex-start;
+  background: #05060a;
+  animation: intro-out 460ms var(--ease-in-out) 1960ms forwards;
+}
+html[data-intro="skip"] .intro { animation: intro-out 240ms var(--ease-out) 0ms forwards; }
+.intro-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.intro-floor, .intro-equity { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.intro-floor  { animation: intro-draw 700ms var(--ease-in-out) 100ms forwards; }
+.intro-equity { animation: intro-draw 900ms var(--ease-in-out) 330ms forwards; }
+.intro-band   { opacity: 0; animation: intro-fade 600ms var(--ease-out) 1150ms forwards; } /* after the line, never ahead of it */
+.intro-head, .intro-ring { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.intro-head   { animation: intro-pop 300ms var(--ease-out) 1180ms forwards; }
+.intro-ring   { animation: intro-ring 850ms var(--ease-out) 1260ms forwards; }
+.intro-label  { opacity: 0; animation: intro-fade 500ms var(--ease-out) 560ms forwards; }
+.intro-label-2 { animation-delay: 920ms; }
+.intro-word { position: relative; margin-top: 21vh; text-align: center; padding: 0 16px; }
+.intro-name {
+  font-size: clamp(26px, 4.6vw, 54px);
+  font-weight: 600;
+  color: #f2f4f8;
+  padding-left: 0.22em; /* letter-spacing trails the last glyph; this re-centres the word */
+  opacity: 0;
+  animation: intro-name 820ms var(--ease-out) 940ms forwards;
+}
+.intro-tag {
+  margin-top: 12px;
+  font-size: clamp(18px, 2.3vw, 28px);
+  color: #a4adbd;
+  opacity: 0;
+  animation: intro-fade 600ms var(--ease-out) 1260ms forwards;
+}
+.intro-hint {
+  position: absolute;
+  bottom: 22px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #3d4657;
+  opacity: 0;
+  animation: intro-fade 400ms var(--ease-out) 700ms forwards;
+}
+@keyframes intro-draw { to { stroke-dashoffset: 0; } }
+@keyframes intro-fade { to { opacity: 1; } }
+@keyframes intro-pop  { from { opacity: 0; transform: scale(0.2); } to { opacity: 1; transform: scale(1); } }
+@keyframes intro-ring { from { opacity: 0.7; transform: scale(0.5); } to { opacity: 0; transform: scale(4.2); } }
+@keyframes intro-name {
+  from { opacity: 0; letter-spacing: 0.62em; filter: blur(6px); }
+  to   { opacity: 1; letter-spacing: 0.22em; filter: blur(0); }
+}
+@keyframes intro-out {
+  to { opacity: 0; transform: translate3d(0, -14px, 0); visibility: hidden; }
+}
+/* The hero's own entrance waits under the intro instead of finishing unseen behind it. */
+html[data-intro] .wr > span,
+html[data-intro] .settle,
+html[data-intro] .fade-late,
+html[data-intro] .floor-rule-draw { animation-play-state: paused; }
+
 /* Key numbers get optical tightening so large figures don't look loose. */
 .figure {
   font-variant-numeric: tabular-nums;
