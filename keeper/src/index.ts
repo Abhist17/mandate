@@ -50,7 +50,7 @@ const BOUNTY_PAID = parseAbiItem(
   "event EnforcementBountyPaid(uint256 indexed mandateId, address indexed enforcer, uint256 amount)",
 );
 
-const lastPushed = new Map<number, {onchain: bigint; at: number}>();
+const lastPushed = new Map<number, {onchain: bigint; at: number; publishedAt: number}>();
 
 /**
  * How often a flat market's price is refreshed. Starts at the configured interval and is
@@ -83,18 +83,44 @@ function chunk<T>(xs: readonly T[], size: number): T[][] {
  * market even when there is nothing to say.
  */
 function pricesWorthPushing(prices: MarketPrice[]): MarketPrice[] {
-  const now = Date.now();
+  const nowSec = Date.now() / 1000;
   return prices.filter((p) => {
     const prev = lastPushed.get(p.id);
     if (!prev) return true;
-    if (now - prev.at >= priceRefreshMs) return true;
-    if (prev.onchain === 0n) return true;
+    // Scheduled on the age the contract will judge — measured from the price's published
+    // time, at the next block — not on when we last pushed. Perpl's testnet timestamps are
+    // already ~20s old when fetched, so "30s after our last push" let the on-chain age reach
+    // ~58s against a 60s bound, and the UI (rightly) called trading paused. Only newer data
+    // is worth a transaction: re-pushing the same timestamp would not make it any fresher.
+    const newer = p.publishedAt > prev.publishedAt;
+    if (newer && (nowSec - prev.publishedAt) * 1000 >= priceRefreshMs) return true;
+    if (prev.onchain === 0n) return newer;
+    if (!newer) return false;
     const diff = p.onchain > prev.onchain ? p.onchain - prev.onchain : prev.onchain - p.onchain;
     return (diff * 10_000n) / prev.onchain >= BigInt(cfg.minPriceMoveBps);
   });
 }
 
+/**
+ * The price source is one dependency and enforcement is another, and they must fail
+ * separately. When Perpl's API is unreachable the keeper used to abort the whole iteration —
+ * marking and enforcement included — even while the price already on chain was fresh enough
+ * to enforce against. Now a failed fetch skips only the push; the contract itself refuses any
+ * mark against a price that has actually gone stale, so nothing unsafe can get through.
+ */
+async function fetchPricesOrSkip(): Promise<MarketPrice[]> {
+  try {
+    return (await fetchPerplPrices()).prices;
+  } catch (err) {
+    log.warn("price source unreachable — marking on the price already on chain", {
+      err: String(err).slice(0, 80),
+    });
+    return [];
+  }
+}
+
 async function pushPrices(prices: MarketPrice[], chainTime: bigint): Promise<void> {
+  if (prices.length === 0) return;
   const due = pricesWorthPushing(prices);
   if (due.length === 0) return;
 
@@ -117,7 +143,7 @@ async function pushPrices(prices: MarketPrice[], chainTime: bigint): Promise<voi
   await publicClient.waitForTransactionReceipt({hash, timeout: 30_000});
 
   const at = Date.now();
-  for (const p of due) lastPushed.set(p.id, {onchain: p.onchain, at});
+  for (const p of due) lastPushed.set(p.id, {onchain: p.onchain, at, publishedAt});
 }
 
 /**
@@ -354,7 +380,7 @@ async function blockLoop(): Promise<void> {
       lastBlock = blockNumber;
       store.observeBlock();
 
-      const snapshot = await fetchPerplPrices();
+      const snapshot = {prices: await fetchPricesOrSkip()};
       await pushPrices(snapshot.prices, block.timestamp);
       await markAll(blockNumber, snapshot.prices);
 
@@ -387,7 +413,7 @@ async function demandLoop(): Promise<void> {
       const block = await publicClient.getBlock({blockTag: "latest"});
       store.observeBlock();
 
-      const snapshot = await fetchPerplPrices();
+      const snapshot = {prices: await fetchPricesOrSkip()};
 
       const active = (await publicClient.readContract({
         address: cfg.registry, abi: registryAbi, functionName: "activeMandates",
