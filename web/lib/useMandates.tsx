@@ -29,6 +29,8 @@ const Ctx = createContext<Store | undefined>(undefined);
 export function MandatesProvider({children}: {children: ReactNode}) {
   const {address} = useSession();
   const [selected, setSelected] = useState<bigint>();
+  const selectedRef = useRef<bigint | undefined>(undefined);
+  selectedRef.current = selected;
 
   // Merge each tick into what we already know: a mandate whose read failed keeps its last
   // value instead of vanishing for a frame. Anything settled drops out on its own, because
@@ -38,6 +40,10 @@ export function MandatesProvider({children}: {children: ReactNode}) {
     async () => {
       if (!isConfigured) return [];
       const ids = await fetchRelevantIds(address);
+      // Whatever is selected is always fetched, even outside the recent window — otherwise
+      // a shared link to an older mandate would never load.
+      const want = selectedRef.current;
+      if (want !== undefined && !ids.includes(want)) ids.push(want);
       const all = await Promise.all(ids.map((id) => fetchMandate(id).catch(() => undefined)));
       const next = new Map<string, Mandate>();
       for (const id of ids) {
@@ -81,6 +87,18 @@ export function MandatesProvider({children}: {children: ReactNode}) {
         : mandates[0]!;
     setSelected(pick.id);
   }, [mandates, selected, address]);
+
+  // Selecting a mandate the list has not fetched yet — one just claimed, or a shared link —
+  // refreshes now instead of waiting out the poll. After a claim the dashboard sat on the old
+  // mandate for a whole cycle, sometimes longer, before switching to the one just issued.
+  const askedFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (selected === undefined || !mandates) return;
+    const key = selected.toString();
+    if (mandates.some((m) => m.id === selected) || askedFor.current === key) return;
+    askedFor.current = key;
+    refresh();
+  }, [selected, mandates, refresh]);
 
   // Same stale-beats-blank rule for the selected one: a single failed poll would otherwise
   // unmount the entire detail view for one tick and remount it the next.

@@ -1,8 +1,8 @@
 "use client";
 
-import {parseAbiItem, type Address} from "viem";
+import {pad, parseAbiItem, parseEventLogs, toEventSelector, type Address} from "viem";
 import {ADDR, publicClient} from "./chain";
-import {walkLogs} from "./logs";
+import {walkTopicLogs} from "./logs";
 
 /**
  * Closed trades, reconstructed from the venue's own events.
@@ -74,12 +74,15 @@ export type Trade = {
  * open-positions table instead.
  */
 export async function fetchTrades(account: Address): Promise<Trade[]> {
-  const [opens, closes, flattens, liquidations] = await Promise.all([
-    walkLogs({address: ADDR.venue as Address, event: openedEvent, args: {account}}),
-    walkLogs({address: ADDR.venue as Address, event: closedEvent, args: {account}}),
-    walkLogs({address: ADDR.venue as Address, event: flattenedEvent, args: {account}}),
-    walkLogs({address: ADDR.venue as Address, event: liquidatedEvent, args: {account}}),
-  ]);
+  // One pass: all four events for this account, one request per window, decoded locally.
+  const raw = await walkTopicLogs(
+    ADDR.venue as Address,
+    [[toEventSelector(openedEvent), toEventSelector(closedEvent), toEventSelector(flattenedEvent), toEventSelector(liquidatedEvent)], pad(account)],
+  );
+  const opens = parseEventLogs({abi: [openedEvent], logs: raw, strict: true});
+  const closes = parseEventLogs({abi: [closedEvent], logs: raw, strict: true});
+  const flattens = parseEventLogs({abi: [flattenedEvent], logs: raw, strict: true});
+  const liquidations = parseEventLogs({abi: [liquidatedEvent], logs: raw, strict: true});
 
   // Blocks carry the timestamps; fetch each one once rather than per row.
   const blocks = new Set<bigint>();

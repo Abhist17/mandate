@@ -31,6 +31,11 @@ export type ProofSpec = {
   shown: string;
   /** Turn the decoded return into something readable. */
   format?: (decoded: unknown) => string;
+  /**
+   * The block the screen's figure was read at. The check re-runs the call at exactly this
+   * block, so it compares like with like; a fresh read at "latest" is shown beside it.
+   */
+  atBlock?: bigint;
 };
 
 export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: () => void}) {
@@ -39,6 +44,7 @@ export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: (
   const [block, setBlock] = useState<bigint>();
   const [at, setAt] = useState<string>();
   const [err, setErr] = useState<string>();
+  const [now, setNow] = useState<{value: string; block: bigint}>();
   const [busy, setBusy] = useState(false);
 
   // Escape closes it. A panel that traps you is a panel people stop opening.
@@ -54,6 +60,7 @@ export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: (
     setDecoded(undefined);
     setBlock(undefined);
     setErr(undefined);
+    setNow(undefined);
   }, [spec]);
 
   const run = useCallback(async () => {
@@ -66,9 +73,14 @@ export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: (
         functionName: spec.functionName,
         args: spec.args as never,
       });
-      const bn = await publicClient.getBlockNumber();
-      // eth_call at an explicit block, so the answer is pinned to something checkable
-      // rather than to "whatever the node felt like when you asked".
+      // Uncached — viem otherwise hands back the number it cached up to 4s ago, often the very
+      // block the screen used, and the "chain has moved" context never appeared.
+      const latest = await publicClient.getBlockNumber({cacheTime: 0});
+      // The verdict re-runs the call at the block the screen read from. Comparing the screen
+      // with a fresh read at "latest" raised false alarms: a price push between the two moved
+      // the number, and the drawer told the user the dashboard was wrong when it was only
+      // older. Same block, same answer — anything else is a real disagreement.
+      const bn = spec.atBlock ?? latest;
       const res = await publicClient.call({to: spec.address, data, blockNumber: bn});
       const hex = res.data ?? "0x";
       setRaw(hex);
@@ -83,6 +95,18 @@ export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: (
         setDecoded(spec.format ? spec.format(out) : stringify(out));
       } catch {
         setDecoded(undefined);
+      }
+      // And the value right now, for context, when the chain has moved since.
+      if (spec.atBlock !== undefined && latest > spec.atBlock) {
+        const fresh = await publicClient.call({to: spec.address, data, blockNumber: latest}).catch(() => undefined);
+        if (fresh?.data) {
+          try {
+            const out = decodeFunctionResult({abi: spec.abi, functionName: spec.functionName, data: fresh.data});
+            setNow({value: spec.format ? spec.format(out) : stringify(out), block: latest});
+          } catch {
+            /* context only */
+          }
+        }
       }
     } catch (e) {
       setErr(String(e).slice(0, 300));
@@ -124,7 +148,7 @@ export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: (
         </header>
 
         <div className="space-y-5 px-5 py-5">
-          <Block label="What the screen says">
+          <Block label={spec.atBlock !== undefined ? `What the screen says · read at block ${spec.atBlock.toLocaleString()}` : "What the screen says"}>
             <div className="num text-xl text-txt-hi">{spec.shown}</div>
           </Block>
 
@@ -191,9 +215,15 @@ export function ProofDrawer({spec, onClose}: {spec: ProofSpec | null; onClose: (
                     }`}
                   >
                     {matches
-                      ? "Matches what the screen is showing. This dashboard is a view over that value, not a copy of it."
-                      : "This does not match the number above. The chain is right and we are wrong — please report it. The whole point of this panel is that you find out from us rather than from a closed account."}
+                      ? `Matches what the screen is showing${spec.atBlock !== undefined ? ", at the same block" : ""}. This dashboard is a view over that value, not a copy of it.`
+                      : "This does not match the number above, at the same block. The chain is right and we are wrong — please report it. The whole point of this panel is that you find out from us rather than from a closed account."}
                   </div>
+                  {now && (
+                    <div className="mt-2 flex items-baseline justify-between gap-3 text-2xs text-txt-lo">
+                      <span>Now, at block {now.block.toLocaleString()} — the chain has moved since the screen read it</span>
+                      <span className="num text-txt-mid">{now.value}</span>
+                    </div>
+                  )}
                 </>
               )}
             </Block>

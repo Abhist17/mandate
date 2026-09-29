@@ -2,7 +2,7 @@
 
 import {useCallback, useEffect, useRef, useState} from "react";
 import type {Address} from "viem";
-import {publicClient, ADDR, MARKETS} from "./chain";
+import {publicClient, ADDR, MARKETS, isPublicNetwork} from "./chain";
 import {registryAbi, poolAbi, venueAbi, oracleAbi, accountAbi, venueExtraAbi, poolExtraAbi} from "./abi";
 
 export type Terms = {
@@ -56,6 +56,8 @@ export type Mandate = {
    *  read the gap between them as "what is still at risk on open positions". */
   balance: bigint;
   floatingPnl: bigint;
+  /** The block every figure above was read at. */
+  block: bigint;
 };
 
 export type Position = {
@@ -131,8 +133,8 @@ function tupleToState(t: unknown): MandateState {
   };
 }
 
-async function readPositions(account: Address): Promise<Position[]> {
-  const openIds = (await publicClient.readContract({
+async function readPositions(account: Address, blockNumber: bigint): Promise<Position[]> {
+  const openIds = (await publicClient.readContract({blockNumber, 
     address: ADDR.venue,
     abi: venueAbi,
     functionName: "openMarkets",
@@ -142,7 +144,7 @@ async function readPositions(account: Address): Promise<Position[]> {
   const out: Position[] = [];
   for (const marketId of openIds) {
     const [pos, markPrice] = await Promise.all([
-      publicClient.readContract({
+      publicClient.readContract({blockNumber, 
         address: ADDR.venue,
         abi: venueExtraAbi,
         functionName: "getPosition",
@@ -154,7 +156,7 @@ async function readPositions(account: Address): Promise<Position[]> {
         margin: bigint;
       }>, // named components, so viem returns an object — see `field` above
       publicClient
-        .readContract({address: ADDR.oracle, abi: oracleAbi, functionName: "price", args: [marketId]})
+        .readContract({blockNumber, address: ADDR.oracle, abi: oracleAbi, functionName: "price", args: [marketId]})
         .then((r) => (r as readonly [bigint, bigint])[0]),
     ]);
 
@@ -176,9 +178,19 @@ async function readPositions(account: Address): Promise<Position[]> {
 }
 
 export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
+  // Every read in one snapshot is pinned to the same block. Read at "latest" one by one, a
+  // price push landing between two of them left equity, floor and headroom from different
+  // blocks — so distance-to-floor need not equal equity minus floor. Pinned, the screen is
+  // one consistent state, and the proof drawer can re-run any call at exactly that block.
+  // Uncached: viem holds a block number for 4s by default, which aged every snapshot. On a
+  // public network the pin sits one block (~0.4s) behind the tip, because the fallback
+  // transport may serve the block number from one node and the reads from a slower one that
+  // cannot answer for a block it has not seen yet.
+  const tip = await publicClient.getBlockNumber({cacheTime: 0});
+  const blockNumber = isPublicNetwork && tip > 0n ? tip - 1n : tip;
   const [termsTuple, stateTuple] = await Promise.all([
-    publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "termsOf", args: [id]}),
-    publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "stateOf", args: [id]}),
+    publicClient.readContract({blockNumber, address: ADDR.registry, abi: registryAbi, functionName: "termsOf", args: [id]}),
+    publicClient.readContract({blockNumber, address: ADDR.registry, abi: registryAbi, functionName: "stateOf", args: [id]}),
   ]);
 
   const state = tupleToState(stateTuple);
@@ -191,12 +203,12 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
   // needing an oracle read). If they fail, show the mandate without them rather than dropping
   // the mandate from the page — which made cards appear and vanish between polls.
   const [floorTuple, headroomTuple, liveEquity, notional, positions] = await Promise.all([
-    publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "floorOf", args: [id]}),
+    publicClient.readContract({blockNumber, address: ADDR.registry, abi: registryAbi, functionName: "floorOf", args: [id]}),
     isActive
-      ? publicClient.readContract({address: ADDR.registry, abi: registryAbi, functionName: "headroom", args: [id]})
+      ? publicClient.readContract({blockNumber, address: ADDR.registry, abi: registryAbi, functionName: "headroom", args: [id]})
       : Promise.resolve([0n, 0n] as const),
     isActive
-      ? (publicClient.readContract({
+      ? (publicClient.readContract({blockNumber, 
           address: ADDR.registry,
           abi: registryAbi,
           functionName: "liveEquity",
@@ -204,13 +216,13 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
         }) as Promise<bigint>)
       : Promise.resolve(state.lastMarkedEquity),
     isActive
-      ? (publicClient.readContract({
+      ? (publicClient.readContract({blockNumber, 
           address: state.account,
           abi: accountAbi,
           functionName: "notional",
         }) as Promise<bigint>)
       : Promise.resolve(0n),
-    isActive ? readPositions(state.account).catch(() => [] as Position[]) : Promise.resolve([]),
+    isActive ? readPositions(state.account, blockNumber).catch(() => [] as Position[]) : Promise.resolve([]),
   ]);
 
   const [floor] = floorTuple as readonly [bigint, bigint];
@@ -218,15 +230,15 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
 
   // The consistency score and payout verdict — the numbers a prop firm computes in private.
   const [consistencyBps, eligibility, floatingPnl] = await Promise.all([
-    publicClient.readContract({
+    publicClient.readContract({blockNumber, 
       address: ADDR.registry, abi: registryAbi, functionName: "consistencyScore", args: [id],
     }) as Promise<bigint>,
-    publicClient.readContract({
+    publicClient.readContract({blockNumber, 
       address: ADDR.registry, abi: registryAbi, functionName: "payoutEligibility", args: [id],
     }) as Promise<readonly [boolean, number]>,
     isActive
       ? (publicClient
-          .readContract({address: state.account, abi: accountAbi, functionName: "floatingPnl"})
+          .readContract({blockNumber, address: state.account, abi: accountAbi, functionName: "floatingPnl"})
           .catch(() => 0n) as Promise<bigint>)
       : Promise.resolve(0n),
   ]);
@@ -238,6 +250,7 @@ export async function fetchMandate(id: bigint): Promise<Mandate | undefined> {
     payoutBlock: Number(eligibility[1]),
     balance: liveEquity - floatingPnl,
     floatingPnl,
+    block: blockNumber,
   };
 }
 

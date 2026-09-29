@@ -42,7 +42,7 @@ const PUBLIC_RPCS = [
   "https://rpc-testnet.monadinfra.com",
 ];
 
-const isPublicNetwork = PUBLIC_RPCS.includes(RPC_URL);
+export const isPublicNetwork = PUBLIC_RPCS.includes(RPC_URL);
 
 const transport = isPublicNetwork
   ? fallback(

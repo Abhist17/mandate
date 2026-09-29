@@ -100,6 +100,7 @@ export function AccountHeader({mandate}: {mandate: Mandate}) {
                 blurb:
                   "headroom() returns how far equity sits above the floor, and the bps it works out to. The same pair markAndEnforce compares before it decides to close you.",
                 address: ADDR.registry as `0x${string}`,
+                atBlock: mandate.block,
                 abi: registryAbi as never,
                 functionName: "headroom",
                 args: [mandate.id],

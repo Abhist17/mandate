@@ -254,6 +254,31 @@ await send("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Esc
 await sleep(400);
 errsSince(e0).length ? bad("Dashboard console clean", errsSince(e0).join(" | ")) : ok("Dashboard console clean");
 
+// ── 5b. the proof drawer must not cry wolf ──────────────────────────────────
+// Regression: the drawer compared the screen with a fresh read at "latest", so any price
+// push between the two made it announce that the dashboard was wrong. It now re-runs the
+// call at the block the screen read from. Move the market while the drawer is open and it
+// must still match — and show the newer value as context.
+await nav("/trade?m=1");
+await waitFor("Distance to floor", 30000);
+await sleep(2000);
+(await click("headroom()", {starts: true})) || bad("Proof chip on a live mandate");
+await waitFor("Verify this number", 8000);
+{
+  const [p1] = await pub.readContract({...oracle, functionName: "price", args: [16]});
+  const t1 = (await pub.getBlock()).timestamp;
+  await pub.waitForTransactionReceipt({hash: await owner.writeContract({...oracle, functionName: "forcePrice", args: [16, (p1 * 1005n) / 1000n, t1]})});
+  await click("run this call now");
+  const same = await waitFor("at the same block", 12000);
+  const moved = await waitFor("the chain has moved since", 4000);
+  same && moved
+    ? ok("Proof drawer verifies at the screen's block", "matches despite a price move mid-check, and shows the newer value")
+    : bad("Proof drawer verifies at the screen's block", `same-block match: ${same}, moved note: ${moved}`);
+  const t2 = (await pub.getBlock()).timestamp;
+  await pub.waitForTransactionReceipt({hash: await owner.writeContract({...oracle, functionName: "forcePrice", args: [16, p1, t2]})});
+}
+await send("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+
 // ── 6. the public page ──────────────────────────────────────────────────────
 const pubPage = await fetch(`${BASE}/m/${id}`).then(async (r) => ({code: r.status, html: await r.text()}));
 /Active/i.test(pubPage.html) && pubPage.code === 200 ? ok("Public mandate page", `/m/${id} server-renders, status Active`) : bad("Public mandate page", `http ${pubPage.code}`);

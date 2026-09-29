@@ -102,3 +102,41 @@ export async function walkRegistryLogs(address: Address, windows = 40n): Promise
   }
   return out;
 }
+
+/**
+ * Several events at once, filtered by a shared indexed topic, one request per window.
+ *
+ * eth_getLogs accepts an OR-list of event signatures in topic 0 alongside a filter on topic 1.
+ * The journal needs four venue events for one account; walking them one event at a time was
+ * four times the requests on an RPC that already caps each at 100 blocks.
+ */
+export async function walkTopicLogs(
+  address: Address,
+  topics: (`0x${string}` | `0x${string}`[] | null)[],
+  windows = 40n,
+): Promise<Log[]> {
+  const head = await publicClient.getBlockNumber({cacheTime: 0});
+  const span = RPC_MAX_LOG_SPAN * windows;
+  const earliest = head > span ? head - span : 0n;
+  const ranges: {from: bigint; to: bigint}[] = [];
+  for (let to = head; to > earliest; ) {
+    const from = to > earliest + RPC_MAX_LOG_SPAN ? to - RPC_MAX_LOG_SPAN + 1n : earliest;
+    ranges.push({from, to});
+    if (from === earliest) break;
+    to = from - 1n;
+  }
+  const hex = (n: bigint) => `0x${n.toString(16)}` as const;
+  const out: Log[] = [];
+  for (let i = 0; i < ranges.length; i += CONCURRENCY) {
+    const got = await Promise.all(
+      ranges.slice(i, i + CONCURRENCY).map((w) =>
+        (publicClient.request({
+          method: "eth_getLogs",
+          params: [{address, topics, fromBlock: hex(w.from), toBlock: hex(w.to)}],
+        } as never) as Promise<Log[]>).catch(() => [] as Log[]),
+      ),
+    );
+    for (const logs of got) out.push(...logs.map((l) => ({...l, blockNumber: BigInt(l.blockNumber as unknown as string), logIndex: Number(l.logIndex)})));
+  }
+  return out.sort((a, b) => Number((a.blockNumber ?? 0n) - (b.blockNumber ?? 0n)) || (a.logIndex ?? 0) - (b.logIndex ?? 0));
+}
