@@ -1,4 +1,4 @@
-import {isAddress, type Address} from "viem";
+import {getAddress, isAddress, type Address} from "viem";
 import {publicClient, ADDR, isConfigured, hasBook, STATUS, BREACH_KIND} from "./chain";
 import {registryAbi, bookAbi} from "./abi";
 
@@ -138,7 +138,9 @@ export async function readLeaderboard(): Promise<{address: Address; record: Reco
       publicClient.readContract({...reg, functionName: "stateOf", args: [BigInt(i + 1)]}).catch(() => undefined),
     ),
   );
-  const traders = [...new Set(states.filter(Boolean).map((s) => (f<string>(s, "trader")).toLowerCase()))] as Address[];
+  // De-duplicated case-insensitively, then checksummed: lowercased addresses in links and
+  // share cards read as a different identity from the one the passport page shows.
+  const traders = [...new Set(states.filter(Boolean).map((s) => (f<string>(s, "trader")).toLowerCase()))].map((a) => getAddress(a));
   const rows = await Promise.all(
     traders.map(async (a) => ({
       address: a,

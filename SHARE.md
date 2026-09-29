@@ -14,8 +14,9 @@ and the floor — so you should not have to answer questions one at a time.
 > the drawdown and the contract closes your position and takes the capital back automatically.
 > Hit your target and it pays you out. Nobody can refuse the payout.
 >
-> The bit I care about: **the consistency rule is a public function.** You can read the exact
-> number a prop firm would compute in private and check their maths.
+> The bit I care about: **enforcement is a market.** Whoever enforces a breach — not me, anyone —
+> gets paid 0.25% of the account for it, like a liquidation bonus. The rules don't depend on me
+> running a bot.
 >
 > Free, testnet, no signup, no challenge fee. Takes about two minutes.
 > Try to break it: <YOUR LINK>
@@ -33,13 +34,16 @@ and the floor — so you should not have to answer questions one at a time.
 > - Your equity is marked **every block** (~0.4s), on chain
 > - Breach the drawdown and the contract flattens your position in the same block
 > - `consistencyScore(you)` is a public function — read it yourself, re-derive it from events
-> - **Anyone** can trigger enforcement. Not just me. That's the point — you don't have to trust
->   that I'll apply the rules fairly, because I can't choose not to
+> - **Anyone** can trigger enforcement — and gets paid for it. There's a bounty board listing
+>   every account by distance to its floor; the first wallet to enforce a breach earns 0.25% of
+>   it. You don't have to trust that I'll apply the rules, because I'm not the one who has to
+> - The dashboard shows **the BTC price that closes your account** — before you place the order
 > - No challenge fee. Nobody makes money when you fail
 >
 > There's also a market where people put up capital against the record you build, and the terms
-> get better as your record does — your track record actually travels, instead of being stuck
-> inside one firm.
+> get better as your record does. Your record is a public page — `/trader/<your address>` — that
+> shows which offers it already qualifies for and exactly what the next one needs. It travels
+> with your wallet instead of being stuck inside one firm.
 >
 > Testnet, free, no signup: <YOUR LINK>
 >
@@ -54,6 +58,7 @@ Traction is 20% of the score and it wants **evidence**, not a number you assert.
 tester for:
 
 1. **A screenshot** of their mandate — ideally the moment they breach
+   (or their share link: `/m/<id>` and `/trader/<address>` both unfurl into a card)
 2. **One sentence** on what confused them (this is more useful than praise)
 3. **The transaction hash** if they got enforced
 
@@ -76,3 +81,10 @@ No. Monad testnet, play money, free from a faucet. Nothing in the app has value.
 There isn't one and I don't. No challenge fees, no subscription. A prop firm earns when you
 fail; here the person who put up the capital simply loses money if you blow up, which is why
 they get to set the terms they want and you get to take them or not.
+
+## Ask a second group to be searchers
+
+The enforcement market needs someone on the other side. Ask a few people to sit on
+`/enforce` with a wallet connected: when anyone's account crosses its floor, the first of them
+to click **Enforce · earn $250** is paid by the contract. It turns testing into a game, and
+every enforcement they win is traction evidence with a transaction hash attached.
