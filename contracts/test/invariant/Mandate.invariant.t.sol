@@ -171,8 +171,32 @@ contract MandateInvariantTest is Fixture {
             sum += asset.balanceOf(handler.lpAt(i));
         }
         sum += asset.balanceOf(backstop);
+        for (uint256 i; i < handler.enforcerCount(); ++i) {
+            address e = handler.enforcerAt(i);
+            if (e == address(pool) || e == address(venue) || e == address(registry) || e == backstop) continue;
+            sum += asset.balanceOf(e);
+        }
 
         assertEq(sum, asset.totalSupply(), "assets went somewhere unaccounted for");
+    }
+
+    /// @notice Enforcing is paid, and paid within its bound: no enforcer ever holds more than
+    ///         the configured share of every allocation that has been settled.
+    /// @dev Enforcers start with nothing, so their balance is exactly what bounties paid them.
+    function invariant_enforcementBountiesAreBounded() public view {
+        uint256 settledAllocation;
+        uint256 n = handler.mandateCount();
+        for (uint256 i; i < n; ++i) {
+            uint256 id = handler.mandateAt(i);
+            Types.MandateState memory s = registry.stateOf(id);
+            if (s.status == Types.Status.Active || s.status == Types.Status.None) continue;
+            settledAllocation += registry.termsOf(id).allocation;
+        }
+        uint256 paid;
+        for (uint256 i; i < handler.enforcerCount(); ++i) {
+            paid += asset.balanceOf(handler.enforcerAt(i));
+        }
+        assertLe(paid, (settledAllocation * registry.enforcementBountyBps()) / 10_000, "bounties exceed their bound");
     }
 
     /// @notice The pool can always honour what it says a share is worth, out of what it holds

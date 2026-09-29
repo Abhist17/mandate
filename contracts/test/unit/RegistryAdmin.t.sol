@@ -109,7 +109,7 @@ contract RegistryAdminTest is Fixture {
         (uint256 id,) = _issue();
         vm.prank(stranger);
         vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthorised.selector, stranger));
-        registry.markOne(id);
+        registry.markOne(id, stranger);
     }
 
     // ─── views the keeper and UI depend on ────────────────────────────────────────

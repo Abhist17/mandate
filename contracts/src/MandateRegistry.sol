@@ -55,6 +55,18 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     /// @notice Max age of an oracle-derived equity mark used for enforcement.
     uint64 public maxMarkAge = 60;
 
+    /// @notice Paid to whoever enforces a breach or an expiry, in bps of the allocation.
+    /// @dev The enforcement market. "Anyone can enforce" is only a guarantee if someone has
+    ///      a reason to: lending protocols do not rely on a trusted liquidator, they pay a
+    ///      liquidation bonus and let searchers race for it. This is the same move applied to
+    ///      a rulebook. The bounty comes out of the side of the settlement the enforcement
+    ///      protects — the pool's, or the backer's — never out of the trader's share, and never
+    ///      more than that side gets back. LPs are buying decentralised enforcement with it.
+    uint16 public enforcementBountyBps = 25; // 0.25% of allocation
+
+    /// @notice Hard ceiling on {enforcementBountyBps}: 1%.
+    uint16 public constant MAX_ENFORCEMENT_BOUNTY_BPS = 100;
+
     uint256 public nextMandateId = 1;
 
     mapping(uint256 => Types.Terms) internal _terms;
@@ -119,6 +131,8 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     event PoolSet(address indexed pool);
     event PreTradeBufferSet(uint16 bps);
     event MaxMarkAgeSet(uint64 age);
+    event EnforcementBountySet(uint16 bps);
+    event EnforcementBountyPaid(uint256 indexed mandateId, address indexed enforcer, uint256 amount);
 
     modifier onlyIssuer() {
         if (!issuers[msg.sender]) revert Errors.NotAuthorised(msg.sender);
@@ -163,6 +177,13 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         if (age == 0) revert Errors.ZeroAmount();
         maxMarkAge = age;
         emit MaxMarkAgeSet(age);
+    }
+
+    /// @notice Set the enforcement bounty. Zero switches it off; above 1% is refused.
+    function setEnforcementBountyBps(uint16 bps) external onlyOwner {
+        if (bps > MAX_ENFORCEMENT_BOUNTY_BPS) revert Errors.BpsOutOfRange(bps);
+        enforcementBountyBps = bps;
+        emit EnforcementBountySet(bps);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -307,7 +328,7 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     /// @param mandateId Mandate to mark.
     /// @return breached Whether this call ended the mandate.
     function markAndEnforce(uint256 mandateId) public nonReentrant returns (bool breached) {
-        return _markAndEnforce(mandateId);
+        return _markAndEnforce(mandateId, msg.sender);
     }
 
     /// @notice Mark many mandates in one transaction.
@@ -325,7 +346,7 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     {
         uint256 n = mandateIds.length;
         for (uint256 i; i < n; ++i) {
-            try this.markOne(mandateIds[i]) returns (bool didBreach) {
+            try this.markOne(mandateIds[i], msg.sender) returns (bool didBreach) {
                 if (didBreach) ++breachedCount;
             } catch {
                 // Deliberately swallowed. See the note above.
@@ -335,13 +356,15 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
 
     /// @notice External entry point used by {markAndEnforceBatch} for per-mandate isolation.
     /// @dev Only callable by this contract. Exists solely so a revert in one mandate can be
-    ///      caught without unwinding the whole batch.
-    function markOne(uint256 mandateId) external returns (bool) {
+    ///      caught without unwinding the whole batch. Carries the batch's caller explicitly:
+    ///      inside this self-call msg.sender is the registry, which recorded the registry as
+    ///      the enforcer of every batched breach — and would have paid it the bounty.
+    function markOne(uint256 mandateId, address enforcer) external returns (bool) {
         if (msg.sender != address(this)) revert Errors.NotAuthorised(msg.sender);
-        return _markAndEnforce(mandateId);
+        return _markAndEnforce(mandateId, enforcer);
     }
 
-    function _markAndEnforce(uint256 mandateId) internal returns (bool breached) {
+    function _markAndEnforce(uint256 mandateId, address enforcer) internal returns (bool breached) {
         Types.MandateState storage s = _states[mandateId];
         if (s.status == Types.Status.None) revert Errors.UnknownMandate(mandateId);
         if (s.status != Types.Status.Active) revert Errors.MandateNotActive(mandateId);
@@ -393,18 +416,19 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
             r.dailyFloor,
             int256(markedEquity) - int256(terms.allocation),
             uint64(block.timestamp),
-            msg.sender
+            enforcer
         );
 
         if (r.breach == Types.BreachKind.None) return false;
 
-        emit Breached(mandateId, r.breach, r.equity, r.effectiveFloor, msg.sender);
+        emit Breached(mandateId, r.breach, r.equity, r.effectiveFloor, enforcer);
         s.breachKind = r.breach;
         _terminate(
             mandateId,
             s,
             terms,
-            r.breach == Types.BreachKind.Expiry ? Types.Status.Expired : Types.Status.Breached
+            r.breach == Types.BreachKind.Expiry ? Types.Status.Expired : Types.Status.Breached,
+            enforcer
         );
         return true;
     }
@@ -438,7 +462,7 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         (bool payable_, Types.PayoutBlock reason) = payoutEligibility(mandateId);
         if (!payable_) revert Errors.PayoutConditionNotMet(mandateId, uint8(reason));
 
-        _terminate(mandateId, s, _terms[mandateId], Types.Status.Closed);
+        _terminate(mandateId, s, _terms[mandateId], Types.Status.Closed, address(0));
     }
 
     /// @notice Whether this mandate may take profit right now, and if not, which condition
@@ -496,11 +520,74 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
     ///      capital that actually came back through the venue, including the spread and fee
     ///      paid to get flat. Anything else pays somebody out of a number that was never
     ///      realisable.
+    function _bountyFor(uint256 allocation, uint256 capitalReturn, address enforcer, address trader)
+        internal
+        view
+        returns (uint256 bounty)
+    {
+        if (enforcer == address(0) || enforcer == trader) return 0;
+        bounty = (allocation * enforcementBountyBps) / 10_000;
+        if (bounty > capitalReturn) bounty = capitalReturn;
+    }
+
+    /// @notice What calling {markAndEnforce} on this mandate would do right now, and pay.
+    /// @dev The bounty board. A searcher polls {activeMandates}, calls this on each, and
+    ///      sends a transaction for any that says `enforceable`. It evaluates the rules
+    ///      against live equity exactly as enforcement would, without writing anything.
+    ///      The bounty shown is computed on marked equity; settlement pays it on the equity
+    ///      that actually comes back after flattening, which can differ by the closing cost.
+    /// @return enforceable Whether a mark now would terminate the mandate.
+    /// @return breach Which rule it would terminate on.
+    /// @return equity Live equity.
+    /// @return floor The binding floor.
+    /// @return bounty What the caller would be paid, if not the trader.
+    function previewEnforce(uint256 mandateId)
+        external
+        view
+        returns (bool enforceable, Types.BreachKind breach, uint256 equity, uint256 floor, uint256 bounty)
+    {
+        Types.MandateState storage s = _states[mandateId];
+        if (s.status != Types.Status.Active) return (false, Types.BreachKind.None, 0, 0, 0);
+        Types.Terms memory terms = _terms[mandateId];
+        uint256 markedEquity = MandateAccount(s.account).equity();
+
+        RiskEngine.MarkResult memory r = RiskEngine.evaluate(
+            RiskEngine.MarkInput({
+                allocation: terms.allocation,
+                netPnl: int256(markedEquity) - int256(terms.allocation),
+                unrealisedPnl: MandateAccount(s.account).floatingPnl(),
+                highWaterMark: s.highWaterMark,
+                dayStartEquity: s.dayStartEquity,
+                dayStartBalance: s.dayStartBalance,
+                dayStartTime: s.dayStartTime,
+                largestDailyGain: s.largestDailyGain,
+                profitableDays: s.profitableDays,
+                tradingDays: s.tradingDays,
+                maxDrawdownBps: terms.maxDrawdownBps,
+                dailyLossBps: terms.dailyLossBps,
+                expiry: terms.expiry,
+                resetHourUtc: terms.resetHourUtc,
+                drawdownMode: terms.drawdownMode,
+                touchIsBreach: terms.touchIsBreach,
+                timestamp: uint64(block.timestamp)
+            })
+        );
+        enforceable = r.breach != Types.BreachKind.None;
+        breach = r.breach;
+        equity = r.equity;
+        floor = r.effectiveFloor;
+        if (enforceable) {
+            (, uint256 capitalReturn) = RiskEngine.split(r.equity, terms.allocation, terms.profitSplitBps);
+            bounty = _bountyFor(terms.allocation, capitalReturn, msg.sender, s.trader);
+        }
+    }
+
     function _terminate(
         uint256 mandateId,
         Types.MandateState storage s,
         Types.Terms memory terms,
-        Types.Status finalStatus
+        Types.Status finalStatus,
+        address enforcer
     ) internal {
         // 1. flatten and pull every asset back to this contract
         uint256 finalEquity = MandateAccount(s.account).liquidateAndSweep();
@@ -509,14 +596,24 @@ contract MandateRegistry is IMandateRegistry, Ownable, ReentrancyGuard {
         (uint256 traderPayout, uint256 poolReturn) =
             RiskEngine.split(finalEquity, terms.allocation, terms.profitSplitBps);
 
+        // 2b. the enforcer's bounty, out of the capital side and capped by it. Not paid for a
+        //     voluntary close (no enforcer), and not to the trader: nobody earns from their
+        //     own breach.
+        uint256 bounty = _bountyFor(terms.allocation, poolReturn, enforcer, s.trader);
+        poolReturn -= bounty;
+
         // 3. mark terminal before paying anyone
         s.status = finalStatus;
         s.lastMarkedEquity = finalEquity;
         s.lastMarkedAt = uint64(block.timestamp);
         _removeActive(mandateId);
 
-        // 4. pay whoever put the capital up
+        // 4. pay whoever put the capital up, and whoever enforced the rules
         if (traderPayout > 0) assetToken.safeTransfer(s.trader, traderPayout);
+        if (bounty > 0) {
+            assetToken.safeTransfer(enforcer, bounty);
+            emit EnforcementBountyPaid(mandateId, enforcer, bounty);
+        }
         if (s.backer == address(0)) {
             if (poolReturn > 0) assetToken.safeTransfer(address(pool), poolReturn);
             pool.onMandateSettled(mandateId, terms.allocation, poolReturn);

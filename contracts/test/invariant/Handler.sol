@@ -230,6 +230,12 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         }
 
         address caller = address(uint160(bound(callerSeed, 1, type(uint96).max)));
+        // Enforcers are paid a bounty, so they hold assets now and the conservation
+        // invariant has to be able to find them.
+        if (!_isEnforcer[caller]) {
+            _isEnforcer[caller] = true;
+            _enforcers.push(caller);
+        }
         vm.prank(caller);
         try registry.markAndEnforceBatch(active) returns (uint256 breaches) {
             ghostMarkCount += active.length;
@@ -262,6 +268,17 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     }
 
     mapping(uint256 => uint256) internal _pendingExpected;
+
+    address[] internal _enforcers;
+    mapping(address => bool) internal _isEnforcer;
+
+    function enforcerCount() external view returns (uint256) {
+        return _enforcers.length;
+    }
+
+    function enforcerAt(uint256 i) external view returns (address) {
+        return _enforcers[i];
+    }
 
     function pendingExpected(uint256 id) external view returns (uint256) {
         return _pendingExpected[id];
