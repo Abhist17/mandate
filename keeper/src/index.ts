@@ -13,7 +13,7 @@
  * private risk server, and it is why this file is allowed to be ordinary software.
  */
 
-import {createPublicClient, createWalletClient, http, fallback, formatEther, type Address} from "viem";
+import {createPublicClient, createWalletClient, http, fallback, formatEther, parseEventLogs, parseAbiItem, type Address} from "viem";
 import {privateKeyToAccount} from "viem/accounts";
 
 import {cfg, monadTestnet} from "./config.js";
@@ -46,6 +46,10 @@ const walletClient = createWalletClient({account, chain: monadTestnet, transport
 const store = new MarkStore(cfg.storePath);
 
 /** Last price pushed per market, so a flat market does not cost a transaction every block. */
+const BOUNTY_PAID = parseAbiItem(
+  "event EnforcementBountyPaid(uint256 indexed mandateId, address indexed enforcer, uint256 amount)",
+);
+
 const lastPushed = new Map<number, {onchain: bigint; at: number}>();
 
 /**
@@ -169,10 +173,18 @@ async function markAll(
       });
 
       if (breaches > 0) {
+        // The enforcement market pays whoever enforces. What this keeper earned is read from
+        // its own receipt, not assumed — and set against the gas it spent, because that ratio
+        // is the whole argument that enforcement does not need us to run it.
+        const paid = parseEventLogs({abi: [BOUNTY_PAID], logs: receipt.logs})
+          .filter((l) => l.args.enforcer.toLowerCase() === account.address.toLowerCase())
+          .reduce((sum, l) => sum + l.args.amount, 0n);
         log.breach(`enforced ${breaches} breach${breaches === 1 ? "" : "es"}`, {
           block: blockNumber,
           tx: hash,
           gas: receipt.gasUsed,
+          bounty: usd(paid),
+          costMon: costMon.toFixed(6),
         });
         await reportBreaches(batch);
       } else {

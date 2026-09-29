@@ -32,8 +32,7 @@ if [ "$FRESH" = "--fresh" ]; then
     pid=$(pid_on_port $p || true)
     [ -n "${pid:-}" ] && kill "$pid" 2>/dev/null && i "stopped :$p"
   done
-  kpid=$(pgrep -f "tsx keeper/src/index.ts" | head -1 || true)
-  [ -n "${kpid:-}" ] && kill "$kpid" 2>/dev/null && i "stopped keeper"
+  pkill -f 'keeper/src/index\.ts' && i "stopped keeper" || true
   sleep 2
 fi
 
@@ -178,8 +177,9 @@ step "6. Keeper"
 cast rpc anvil_setBalance "$KEEPER_ADDRESS" 0x21E19E0C9BAB2400000 --rpc-url $RPC >/dev/null 2>&1 \
   && i "keeper funded with 10,000 MON on the fork"
 
-kpid=$(pgrep -f "tsx keeper/src/index.ts" | head -1 || true)
-[ -n "${kpid:-}" ] && kill "$kpid" 2>/dev/null && sleep 1
+# The whole tree (npm → sh → node). Killing only the first match orphans the node process
+# and leaves two keepers marking the same mandates.
+pkill -f 'keeper/src/index\.ts' && sleep 1 || true
 setsid nohup npx tsx keeper/src/index.ts > "$LOGS/keeper.log" 2>&1 < /dev/null &
 disown
 sleep 6

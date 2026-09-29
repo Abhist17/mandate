@@ -9,6 +9,8 @@ for p in 3000 8546; do
   pid=$(pid_on_port $p)
   if [ -n "${pid:-}" ]; then kill "$pid" 2>/dev/null && echo "stopped :$p"; fi
 done
-kpid=$(pgrep -f "tsx keeper/src/index.ts" | head -1)
-if [ -n "${kpid:-}" ]; then kill "$kpid" 2>/dev/null && echo "stopped keeper"; fi
+# Every process in the keeper's tree, not just the first match: `npx tsx` is npm → sh → node,
+# and killing only the npm wrapper orphans the node process, which keeps running and marking
+# — two keepers, double the gas.
+pkill -f 'keeper/src/index\.ts' && echo "stopped keeper" || true
 echo "done"

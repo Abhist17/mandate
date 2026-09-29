@@ -104,7 +104,7 @@ g "http://localhost:3000 — now reading Monad testnet"
 
 # ── 5. keeper ─────────────────────────────────────────────────────────────────
 step "5. Keeper"
-kpid=$(pgrep -f "tsx keeper/src/index.ts" | head -1 || true); [ -n "${kpid:-}" ] && kill "$kpid" 2>/dev/null
+pkill -f 'keeper/src/index\.ts' || true  # whole tree; see up.sh
 setsid nohup npx tsx keeper/src/index.ts > "$LOGS/keeper.log" 2>&1 < /dev/null & disown
 g "marking every block on the real network"
 
