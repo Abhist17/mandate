@@ -7,12 +7,14 @@
 ### The rules are the contract.
 
 **An onchain prop firm on Monad.** LPs deposit capital. Traders receive a *mandate* — an
-allocation with encoded terms. A keeper marks equity every block. Breach the drawdown and
-the contract flattens the position and revokes the mandate in the same block.
+allocation with encoded terms. Equity is marked against live prices. Breach the drawdown and
+the contract flattens the position and revokes the mandate in the same transaction — and
+**pays whoever enforced it.**
 
-No payout desk. No discretion. No "we reviewed your trading and found a violation" email.
+No payout desk. No discretion. No keeper you have to trust. No "we reviewed your trading and
+found a violation" email.
 
-[Architecture](#architecture) · [Why Monad](#why-this-needs-monad) · [Quickstart](#quickstart) · [Sponsors](#sponsor-integrations)
+[The enforcement market](#the-enforcement-market) · [The product](#the-product) · [Architecture](#architecture) · [Why Monad](#why-this-needs-monad) · [Quickstart](#quickstart)
 
 </div>
 
@@ -154,11 +156,51 @@ At 400ms blocks and sub-cent gas, trust-minimised enforcement becomes affordable
 first time. The claim is not "Monad is faster so it's better." It's that **the enforcement
 loop is only economically viable at this block time and gas cost.**
 
-## `enforce()` is permissionless
+## The enforcement market
 
-Anyone can call it — any LP, any observer, any competing trader. The keeper is a
-convenience, not a trust assumption. That's the property that distinguishes this from a
-prop firm's private server.
+"Anyone can enforce" is only a guarantee if someone has a reason to. Every existing onchain
+prop firm — and every earlier version of Mandate — quietly depends on *one* operator running
+a keeper. When that keeper stops, the rules stop.
+
+Lending protocols solved this years ago. Aave does not trust a liquidator; it pays a
+liquidation bonus and lets searchers race for it. **Mandate does the same for a rulebook.**
+
+```solidity
+// MandateRegistry
+uint16 public enforcementBountyBps = 25;            // 0.25% of allocation, owner-tunable, 1% hard ceiling
+
+function previewEnforce(uint256 id) external view   // the bounty board
+    returns (bool enforceable, BreachKind rule, uint256 equity, uint256 floor, uint256 bounty);
+
+function markAndEnforce(uint256 id) external;       // flattens, settles, pays the caller — one tx
+```
+
+A searcher's entire job:
+
+```python
+for id in registry.activeMandates():
+    ok, rule, _, _, bounty = registry.previewEnforce(id)
+    if ok:
+        registry.markAndEnforce(id)        # bounty paid in the same transaction
+```
+
+The design constraints, each one tested:
+
+- **Paid from the capital side**, never the trader's share — the LPs whose capital the
+  enforcement protects are the ones buying it. Never more than that side gets back.
+- **The trader is never paid for enforcing their own mandate.** Nobody profits from their own
+  breach.
+- **Breach and expiry both pay** — closing an expired mandate is work too. A voluntary close
+  pays nothing.
+- **The real caller is paid, even through the batch path.** `markAndEnforceBatch` isolates
+  each mandate with a self-call, where `msg.sender` is the registry itself — the batch's
+  caller is threaded through explicitly, which also fixed `Breached` events recording the
+  registry as their enforcer.
+- **Bounded, as an invariant:** across 16,384 fuzzed calls, no enforcer is ever paid more than
+  the configured share of the allocations that settled, and every asset remains accounted for.
+
+The keeper earns the same bounty as anyone else, and logs it beside the gas it spent. It is
+now what the rest of the system always claimed it was: a convenience, not a trust assumption.
 
 ## Architecture
 
@@ -183,6 +225,23 @@ LP deposits ──► CapitalPool ──► allocates ──► MandateAccount (
 | Keeper | `keeper/` | Block subscriber, batched marks, gas accounting |
 | Indexer | `indexer/` | Envio HyperIndex — equity curves, fill history |
 | Frontend | `web/` | Trader view (equity curve + floor), LP view |
+
+## The product
+
+| Route | What it is |
+|---|---|
+| `/` | The story in motion: an opening that draws the product's own mechanic (the floor, then equity above it), a live **capital engine** diagram of the whole loop, a scripted session on real preset terms, a **real breach recorded from chain**, the live bounty board, and the path from starter mandate to backed capital |
+| `/trade` | The client area. Balance / equity / unrealised P&L, **distance to floor**, and **the price that closes you** — the funded-account equivalent of a liquidation price, shown before you place an order and verified against `previewEnforce` to within 0.05%. Equity curve with the trailing floor ratcheting behind it, trading objectives split into *limits* (end the account) and *conditions* (gate the payout), a journal that marks exits the contract forced as **ENFORCED**, and a **"verify this number"** drawer that re-runs the exact `eth_call` behind any figure and compares the bytes to the screen |
+| `/enforce` | **The bounty board.** Every live mandate by distance to its floor, what enforcing each would pay *your* wallet, one-click enforcement, and a live tape of every mandate funded and every breach enforced |
+| `/trader/<address>` | **Trader passport.** The record the contract wrote — settled, breaches, profitable exits, capital entrusted, net realised — and every open backer offer marked *qualifies* or annotated with the book's own reason. The record is the application |
+| `/traders` | Leaderboard, ranked by a rule printed on the page and re-derivable from `recordOf` |
+| `/market` | The underwriting book — LPs post offers against the record they want; any trader who meets it takes it |
+| `/lp` | The capital pool: deposit, allocation, where the risk is, withdrawal queue |
+| `/m/<id>` | A mandate's public page, server-rendered, with a share card whose headline is distance to floor |
+
+Motion is a consequence, never decoration: every animated element is a step the protocol
+performs, loops pause offscreen, and under `prefers-reduced-motion` every scene renders in
+its finished state.
 
 ## See it work without installing anything
 
@@ -251,15 +310,17 @@ See [SPEC.md](SPEC.md) for the build specification.
 - [x] Phase 0 — Scaffold
 - [x] Phase 1 — Venue gate resolved ([findings](docs/PHASE1-FINDINGS.md))
 - [x] Phase 2 — Core contracts
-- [x] Phase 3 — 250 tests, 10 invariants, fuzz
+- [x] Phase 3 — 261 tests, 11 invariants, fuzz
 - [x] Phase 4 — Keeper
 - [x] Phase 5 — Trader + LP frontend
 - [x] Phase 6 — Envio indexer
 - [x] Phase 7 — Deploy + seed
 - [x] Phase 8 — Live breach demo
+- [x] Phase 9 — The enforcement market: bounties, `previewEnforce`, the bounty board
+- [x] Phase 10 — Trader passports, the price that closes you, motion system
 
 ```
-forge test    250 passed, 0 failed
+forge test    261 passed, 0 failed
 coverage      RiskEngine 100% · MandateRegistry 100% · DemoIssuer 100%
               95.52% lines across contracts/src (the deploy script is excluded —
               coverage of a deploy script measures nothing)
@@ -295,7 +356,7 @@ interval) and marks against Perpl's own oracle. Full reasoning in
 ## Testing
 
 ```bash
-make test        # 250 tests
+make test        # 261 tests
 make auth-check  # sign-in flow + every replay and forgery path it must refuse
 make coverage    # RiskEngine 99%, MandateRegistry 100%, 95%+ across src/
 make smoke       # renders both pages in a real browser, fails on any console error
@@ -309,7 +370,7 @@ The boundary cases are the point. A drawdown rule that fires one wei early confi
 account for nothing; one that fires late is a rule the pool cannot rely on. So the floor
 comparison is asserted at exactly ±1 wei on both sides.
 
-Ten invariants hold across ~16,000 random calls — no Active mandate below its floor at its
+Eleven invariants hold across ~16,000 random calls — no Active mandate below its floor at its
 last mark, high-water marks are peaks, the registry never holds assets between transactions,
 every asset unit is accounted for across all participants, settlement legs sum to the equity
 that came back.
