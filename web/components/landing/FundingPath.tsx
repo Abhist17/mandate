@@ -18,7 +18,7 @@ import {easeInOut, easeOut, phase, useFrame, useInView, usePrefersReducedMotion}
  * the new account's numbers arrive and then hold still. It should feel like an order that
  * filled — something that simply happened because the code said it would.
  *
- * Plays once when it scrolls into view, and can be replayed. Under reduced motion it is
+ * Renders the finished path; the replay button re-runs it. Under reduced motion it is
  * simply the finished state.
  */
 
@@ -82,10 +82,10 @@ export function FundingPath() {
   const [t, setT] = useState(END);
   const [run, setRun] = useState(0);
 
+  // The landing page shows the finished path rather than performing it. Motion here is
+  // opt-in — the replay button below — so nothing moves until someone asks it to.
   useEffect(() => {
-    const on = document.documentElement.dataset.motion === "on";
-    setMotionOn(on);
-    if (on) setT(0); // parked offscreen; plays from the start when it arrives
+    setMotionOn(document.documentElement.dataset.motion === "on");
   }, []);
 
   useEffect(() => {

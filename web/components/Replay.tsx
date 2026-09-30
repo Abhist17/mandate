@@ -31,13 +31,19 @@ const STEP_MS = 1100;
 export function Replay({
   autoPlay = true,
   loop = true,
+  still = false,
 }: {
   autoPlay?: boolean;
   /** Presentation mode plays once and holds on the breach, so narration stays in sync. */
   loop?: boolean;
+  /**
+   * The landing page asks for the answer, not the performance: the breach frame, paused,
+   * with play one click away. Same posture reduced motion already got.
+   */
+  still?: boolean;
 }) {
-  const [i, setI] = useState(0);
-  const [playing, setPlaying] = useState(autoPlay);
+  const [i, setI] = useState(still ? replay.frames.length - 1 : 0);
+  const [playing, setPlaying] = useState(autoPlay && !still);
   const frames = replay.frames as Frame[];
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -45,9 +51,10 @@ export function Replay({
   // it later by flipping the prop — without this the replay sat on frame 0 forever while the
   // narration talked about a breach happening.
   useEffect(() => {
+    if (still) return;
     setPlaying(autoPlay);
     if (autoPlay) setI(0);
-  }, [autoPlay]);
+  }, [autoPlay, still]);
 
   // Someone who has asked for less motion gets the answer, not the playback: the breach
   // frame, paused, with play one click away. Only on the looping landing copy — presentation

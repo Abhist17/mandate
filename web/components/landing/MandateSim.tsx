@@ -1,11 +1,11 @@
 "use client";
 
-import {useEffect, useRef, useState} from "react";
+import {useState} from "react";
 import Link from "next/link";
-import {easeInOut, useFrame, useInView, usePrefersReducedMotion} from "@/lib/motion";
+import {easeInOut} from "@/lib/motion";
 
 /**
- * Inside a mandate — a scripted session, played on a loop.
+ * Inside a mandate — a scripted session, held on its final frame.
  *
  * What it shows is the part of the product a reader cannot see from a static page: the floor
  * is not a number, it is a line that ratchets up behind a winning trader and never comes back
@@ -116,36 +116,10 @@ const xAt = (i: number) => X0 + ((X1 - X0) * i) / (N - 1);
 const yAt = (v: number) => Y1 - ((v - LO) / (HI - LO)) * (Y1 - Y0);
 
 export function MandateSim() {
-  const reduce = usePrefersReducedMotion();
-  const [ref, inView] = useInView<HTMLDivElement>({once: false, threshold: 0.25, rootMargin: "0px"});
-  const [motionOn, setMotionOn] = useState(false);
-  // The server renders the finished session. With motion on, the scene is parked at the
-  // start while it is still offscreen, so it can play from the beginning when it arrives.
-  const [t, setT] = useState(FINAL);
-
-  useEffect(() => {
-    const on = document.documentElement.dataset.motion === "on";
-    setMotionOn(on);
-    if (on) setT(0);
-  }, []);
-
-  const active = motionOn && !reduce && inView;
-
-  // ~30 fps is plenty for numbers and a line, and halves the render work. The last-set
-  // time lives in a ref: a local would reset on every render and throttle nothing.
-  const lastSet = useRef(-Infinity);
-  useEffect(() => {
-    lastSet.current = -Infinity; // the clock restarts from zero on every activation
-  }, [active]);
-  useFrame(active, (elapsed) => {
-    if (elapsed - lastSet.current < 33) return;
-    lastSet.current = elapsed;
-    setT(elapsed % LOOP);
-  });
-
-  useEffect(() => {
-    if (reduce) setT(FINAL);
-  }, [reduce]);
+  // The finished session, held still. Section 02 argues the ratchet in words and a drawn
+  // line — it does not need to perform it on a loop behind the reader.
+  const [t] = useState(FINAL);
+  const active = false;
 
   // Where we are: completed tick index, and how far into the next segment.
   const i = Math.min(N - 1, Math.floor(t / TICK));
@@ -196,7 +170,7 @@ export function MandateSim() {
     .reverse();
 
   return (
-    <div ref={ref} className="overflow-hidden rounded-xl border border-edge bg-ink-900 shadow-panel-lg" style={{opacity: fadeOut}}>
+    <div className="overflow-hidden rounded-xl border border-edge bg-ink-900 shadow-panel-lg" style={{opacity: fadeOut}}>
       {/* header */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-edge px-4 py-3">
         <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-txt-hi">Mandate · live view</span>

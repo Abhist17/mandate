@@ -3,13 +3,11 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {Replay} from "@/components/Replay";
-import {Reveal, WordReveal} from "@/components/motion";
-import {useParallax} from "@/lib/motion";
+import {WordReveal} from "@/components/motion";
 import {CapitalEngine} from "@/components/landing/CapitalEngine";
 import {HeroBackdrop} from "@/components/landing/HeroBackdrop";
 import {MandateSim} from "@/components/landing/MandateSim";
 import {FundingPath} from "@/components/landing/FundingPath";
-import {SectionRail} from "@/components/landing/SectionRail";
 
 /**
  * The tape is the only part of this page that talks to the chain, and it brings viem with
@@ -47,10 +45,8 @@ const EnforcementPreview = dynamic(
 export default function Landing() {
   return (
     <div className="relative mx-auto max-w-5xl space-y-24 py-4 sm:py-8">
-      <SectionRail />
-
       {/* ── 01 · the claim, and the loop behind it ─────────────────────────── */}
-      <section data-rail="01" data-rail-label="Capital in" className="relative pt-2 sm:pt-4">
+      <section className="relative pt-2 sm:pt-4">
         <HeroBackdrop />
 
         <header className="relative space-y-6 text-center">
@@ -99,29 +95,25 @@ export default function Landing() {
       </section>
 
       {/* ── 02 · living under the rules ──────────────────────────────────────── */}
-      <section data-rail="02" data-rail-label="Enforced" className="space-y-6">
+      <section className="space-y-6">
         <SectionHead
           index="02"
           kicker="Enforcement"
           title="The floor is a line, and it only moves up."
           body="A trailing drawdown ratchets behind every new peak and never comes back down. The contract checks equity against it on every mark — and when equity gets close, you see it here before it matters."
         />
-        <Reveal wipe delay={120}>
-          <MandateSim />
-        </Reveal>
+        <MandateSim />
       </section>
 
       {/* ── 03 · crossing it ──────────────────────────────────────────────────── */}
-      <section data-rail="03" data-rail-label="Closed" className="space-y-6">
+      <section className="space-y-6">
         <SectionHead
           index="03"
           kicker="A real breach"
           title="Cross it, and the account closes. In one transaction."
           body="Recorded from a real mandate on chain — not a simulation. The position was flattened and the capital returned to the pool by a wallet with no role in the system, because the function that does it has no access control."
         />
-        <Reveal wipe delay={120}>
-          <Replay />
-        </Reveal>
+        <Replay still />
         <p className="px-1 text-center text-2xs text-txt-lo">
           <Link href="/demo" className="underline decoration-txt-lo/40 hover:text-txt-hi">
             Watch the full walkthrough →
@@ -130,7 +122,7 @@ export default function Landing() {
       </section>
 
       {/* ── 04 · the enforcement market ─────────────────────────────────────── */}
-      <section data-rail="04" data-rail-label="Paid" className="space-y-6">
+      <section className="space-y-6">
         <SectionHead
           index="04"
           kicker="The enforcement market"
@@ -138,31 +130,27 @@ export default function Landing() {
           body="Lending protocols never trusted a liquidator — they paid a bonus and let searchers race for it. Mandate does the same for a rulebook: the first wallet to enforce a breach earns a share of the allocation, out of the capital it protects. The rules are enforced by whoever gets there first, not by us."
         />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Reveal wipe delay={100}>
-            <EnforcementPreview />
-          </Reveal>
-          <Reveal delay={200}>
-            <div className="h-full rounded-xl border border-edge bg-ink-950/60 p-4">
-              <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo">A searcher&rsquo;s whole job</div>
-              <pre className="num mt-3 overflow-x-auto text-[0.68rem] leading-relaxed text-txt-mid">
+          <EnforcementPreview />
+          <div className="h-full rounded-xl border border-edge bg-ink-950/60 p-4">
+            <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo">A searcher&rsquo;s whole job</div>
+            <pre className="num mt-3 overflow-x-auto text-[0.68rem] leading-relaxed text-txt-mid">
 {`for id in registry.activeMandates():
-  ok, rule, _, _, bounty =
-    registry.previewEnforce(id)
-  if ok:
-    registry.markAndEnforce(id)`}
-              </pre>
-              <p className="mt-3 text-2xs leading-relaxed text-txt-lo">
-                One transaction flattens the book, settles the split and pays the enforcer. The
-                trader can never be paid for their own breach, and the bounty never touches their
-                share.
-              </p>
-            </div>
-          </Reveal>
+ok, rule, _, _, bounty =
+  registry.previewEnforce(id)
+if ok:
+  registry.markAndEnforce(id)`}
+            </pre>
+            <p className="mt-3 text-2xs leading-relaxed text-txt-lo">
+              One transaction flattens the book, settles the split and pays the enforcer. The
+              trader can never be paid for their own breach, and the bounty never touches their
+              share.
+            </p>
+          </div>
         </div>
       </section>
 
       {/* ── 05 · from record to capital ──────────────────────────────────────── */}
-      <section data-rail="05" data-rail-label="Funded" className="space-y-6">
+      <section className="space-y-6">
         <SectionHead
           index="05"
           kicker="The path"
@@ -173,23 +161,20 @@ export default function Landing() {
       </section>
 
       {/* ── 05 · the claims ──────────────────────────────────────────────────── */}
-      <section data-rail="06" data-rail-label="Verify" className="space-y-6">
+      <section className="space-y-6">
         <SectionHead index="06" kicker="Checkable" title="Three claims. Each one is a function you can call." />
         <div className="grid gap-3 sm:grid-cols-3">
           <Claim
-            delay={0}
             k="Every block"
             t="Marked against live prices"
             d="Equity is re-checked roughly every 400ms against Perpl's oracle. A mark costs about $0.0003 — which is the only reason a loop like this can exist at all."
           />
           <Claim
-            delay={90}
             k="Anyone"
             t="Can enforce a breach"
             d="markAndEnforce has no access control. An LP, an observer, a rival trader — the rules do not depend on us choosing to apply them."
           />
           <Claim
-            delay={180}
             k="No discretion"
             t="Including on the payout"
             d="The consistency rule prop firms deny payouts on is a view function here. Read the number yourself and re-derive it from events."
@@ -198,25 +183,23 @@ export default function Landing() {
       </section>
 
       {/* ── the honest part ──────────────────────────────────────────────────── */}
-      <Reveal>
-        <section className="rounded-xl border border-edge bg-ink-950/60 p-5">
-          <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo">What this is not</h2>
-          <p className="mt-2 text-2xs leading-relaxed text-txt-mid">
-            Testnet only — nothing here has value. Onchain prop firms already exist; Propr,
-            Hypernova and Vanta all launched in 2026. What none of them documents is onchain{" "}
-            <span className="text-txt-hi">enforcement</span>: they publish immutable rules and
-            settle payouts on chain, while the engine that decides whether you breached stays
-            on a private server. That engine is the part we built.
-          </p>
-        </section>
-      </Reveal>
+      <section className="rounded-xl border border-edge bg-ink-950/60 p-5">
+        <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-txt-lo">What this is not</h2>
+        <p className="mt-2 text-2xs leading-relaxed text-txt-mid">
+          Testnet only — nothing here has value. Onchain prop firms already exist; Propr,
+          Hypernova and Vanta all launched in 2026. What none of them documents is onchain{" "}
+          <span className="text-txt-hi">enforcement</span>: they publish immutable rules and
+          settle payouts on chain, while the engine that decides whether you breached stays
+          on a private server. That engine is the part we built.
+        </p>
+      </section>
     </div>
   );
 }
 
 function SectionHead({index, kicker, title, body}: {index: string; kicker: string; title: string; body?: string}) {
   return (
-    <Reveal wipe as="header" className="max-w-2xl space-y-2">
+    <header className="max-w-2xl space-y-2">
       <div className="num flex items-center gap-2 text-2xs uppercase tracking-[0.16em] text-txt-lo">
         <span className="text-acc-hi">{index}</span>
         <span className="h-px w-6 bg-edge-hi" />
@@ -224,22 +207,16 @@ function SectionHead({index, kicker, title, body}: {index: string; kicker: strin
       </div>
       <h2 className="text-balance text-xl font-semibold tracking-tight text-txt-hi sm:text-2xl">{title}</h2>
       {body && <p className="text-sm leading-relaxed text-txt-mid">{body}</p>}
-    </Reveal>
+    </header>
   );
 }
 
-function Claim({k, t, d, delay}: {k: string; t: string; d: string; delay: number}) {
-  // Depth, a few pixels of it, on pointer devices only — see useParallax.
-  const depth = useParallax<HTMLDivElement>(0.03, 6);
+function Claim({k, t, d}: {k: string; t: string; d: string}) {
   return (
-    <Reveal delay={delay} fill>
-      <div ref={depth} className="h-full will-change-transform">
-        <div className="lift h-full rounded-xl border border-edge bg-ink-900 p-4 hover:border-edge-hi">
-          <div className="text-2xs uppercase tracking-[0.12em] text-up">{k}</div>
-          <div className="mt-1 text-xs font-medium text-txt-hi">{t}</div>
-          <p className="mt-1.5 text-2xs leading-relaxed text-txt-lo">{d}</p>
-        </div>
-      </div>
-    </Reveal>
+    <div className="lift h-full rounded-xl border border-edge bg-ink-900 p-4 hover:border-edge-hi">
+      <div className="text-2xs uppercase tracking-[0.12em] text-up">{k}</div>
+      <div className="mt-1 text-xs font-medium text-txt-hi">{t}</div>
+      <p className="mt-1.5 text-2xs leading-relaxed text-txt-lo">{d}</p>
+    </div>
   );
 }
